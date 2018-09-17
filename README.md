@@ -1,1 +1,1 @@
-# bbs-bayes
+# bbs-metanalysis-bayes
