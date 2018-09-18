@@ -1,0 +1,85 @@
+---
+title: "Bayesian Metanalysis"
+output: html_notebook
+---
+
+
+```{r setup}
+library(rstan)
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+library(skimr)
+library(readxl)
+library(here)
+library(tidyverse)
+library(tidybayes)
+library(brms)
+```
+
+```{r}
+convert_czech_numeric <- function(column) {
+  result <- as.numeric(gsub(",",".", column, fixed = TRUE))
+  if(any(is.na(result) != is.na(column))) {
+    stop("Problem converting")
+  }
+  result
+}
+
+data <- read_excel(here("private_data","--META-DATA-5.xlsx"), sheet = "DATA 5") %>%
+  rename(case_no = "source case n.", mut_nucl = "mu nucl", mut_amino = "principal mutation", mut_type = "mu-type", additional_mutation = "additional mutation", REPROD = "Reprod. organs abnorm") %>%
+  select(source, case_no,gene, mut_nucl, mut_amino, mut_type, 
+         Sex, Age, RD:speech) %>%
+  mutate(CI = convert_czech_numeric(CI), DD = convert_czech_numeric(DD),
+         LIV = convert_czech_numeric(LIV), REN = convert_czech_numeric(REN),
+         REPROD = convert_czech_numeric(REPROD),
+         Sex = factor(toupper(Sex)), 
+         source = factor(source),
+         gene = factor(gene))
+
+data %>% skim()
+```
+
+```{r}
+data %>% group_by(gene) %>% summarise(count = length(gene)) 
+```
+
+
+```{r}
+phenotypes_to_use <- c("RD","OBE","PD","CI","REN")
+
+data_long <- data %>% 
+  rowid_to_column("ID") %>%  
+  gather("phenotype","phenotype_value",RD:speech) %>%
+  filter(phenotype %in% phenotypes_to_use) %>%
+  filter(!is.na(phenotype_value)) %>%
+  mutate(phenotype_value = as.integer(if_else(phenotype == 0, 0 , 1)))
+```
+
+TODO co s pulkami?
+
+```{r}
+formula_gene_only <- brmsformula(phenotype_value ~ 0 + 1|phenotype + gene|phenotype, family = "bernoulli")
+
+get_prior(formula_gene_only, data = data_long)
+priors <- c(prior(normal(0,2), class = Intercept),
+            prior(normal(0,2), class = sd)
+            )
+
+make_stancode(formula_gene_only, data_long, prior = priors)
+
+fit_gene_only <- brm(formula_gene_only, prior = priors, data = data_long)
+```
+
+
+```{r}
+```
+
+
+The model:
+Individual phenotypes are predicted by:
+  * The mutated subdomain (hierarchical)
+    * Possibly a hierarchical effect of the specific mutation
+  * Sex
+  * Study (hierarchical)
+
+TODO: Figure out a way to make phenotypes correlated - maybe have hierarchical MVN priors for the coeffs?
