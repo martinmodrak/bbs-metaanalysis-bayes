@@ -41,8 +41,30 @@ data <- read_excel(here("private_data","--META-DATA-5.xlsx"), sheet = "DATA 5") 
          LIV = convert_czech_numeric(LIV), REN = convert_czech_numeric(REN),
          REPROD = convert_czech_numeric(REPROD),
          Sex = factor(toupper(Sex)), 
-         source = factor(source),
-         gene = factor(gene))
+         source = factor(source)
+         ) %>%
+
+  #Get age categories
+  mutate(Age_corr = if_else(Age == "5 month", as.character(5/12), gsub(",",".", Age)),
+         age_group = factor(case_when(
+           is.na(Age_corr) ~ NA_character_,
+           !is.na(as.numeric(Age_corr)) ~ 
+             case_when(
+               as.numeric(Age_corr) < 10 ~ "0-9",
+               as.numeric(Age_corr) < 20 ~ "10-19",
+               as.numeric(Age_corr) < 30 ~ "20-29",
+               as.numeric(Age_corr) < 40 ~ "30-39",
+               as.numeric(Age_corr) < 50 ~ "40-49",
+               as.numeric(Age_corr) < 60 ~ "50-59",
+               TRUE ~ "60+",
+             ),
+           TRUE ~ Age_corr
+           ))
+  ) %>%
+  
+  #Code BBS to help ordering
+  mutate(gene = factor(gsub("BBS([0-9])$","BBS0\\1", gene)))
+
 
 data %>% skim()
 ```
@@ -62,7 +84,7 @@ data_long_all %>% group_by(phenotype) %>% summarise(count = sum(!is.na(phenotype
 
 
 phenotypes_to_use <- c("RD","OBE","PD","CI","REN","speech")
-genes_to_use <- paste0("BBS",1:8)
+genes_to_use <- sprintf("BBS%02d",1:12)
 
 
 data_long <- data_long_all %>%
@@ -98,42 +120,69 @@ priors <- c(intercept_prior, sd_prior)
 
 #make_stancode(formula_gene_only, data_long, prior = priors)
 
-fit_gene_only <- brm(formula_gene_only, prior = priors, data = data_long , control = list(adapt_delta = 0.9))
+fit_gene_only <- brm(formula_gene_only, prior = priors, data = data_long , control = list(adapt_delta = 0.95))
 fit_gene_only
 ```
 
 
 ```{r}
+my_ppc <- function(fun, ...) {
+  fun(..., prob = posterior_interval, fatten = 1.5, freq = FALSE)
+}
+
+my_ppc_bars <- function(...) {
+  my_ppc(ppc_bars, ...)
+}
+
+my_ppc_bars_grouped <- function(...) {
+  my_ppc(ppc_bars_grouped, ...)
+}
+
 run_pp_checks <- function(fit, data_long, out_func = print) {
-  pp_check(fit, "bars", prob = posterior_interval, fatten = 1.5, freq = FALSE) %>% out_func
-  pp_check(fit, "bars_grouped", group = "gene", prob = posterior_interval, fatten = 1.5, freq = FALSE)%>% out_func
-  pp_check(fit, "bars_grouped", group = "phenotype", prob = posterior_interval, fatten = 1.5, freq = FALSE)%>% out_func
   
   predicted <- posterior_predict(fit) 
-  sex_fct <- factor(if_else(is.na(data_long$Sex), "NA", as.character(data_long$Sex)))
-  ppc_bars_grouped(data_long$phenotype_value, predicted, group = sex_fct, prob = posterior_interval, fatten = 1.5, freq = FALSE) %>% out_func
-  ppc_bars_grouped(data_long$phenotype_value, predicted, group = interaction(sex_fct, data_long$phenotype) , prob = posterior_interval, fatten = 1.5, freq = FALSE) %>% out_func
 
+  
+  my_ppc_bars(data_long$phenotype_value, predicted) %>% out_func
+  my_ppc_bars_grouped(data_long$phenotype_value, predicted, group = data_long$gene) %>% out_func
+  my_ppc_bars_grouped(data_long$phenotype_value, predicted, group = data_long$phenotype) %>% out_func
+
+  sex_fct <- factor(if_else(is.na(data_long$Sex), "NA", as.character(data_long$Sex)))
+  my_ppc_bars_grouped(data_long$phenotype_value, predicted, group = sex_fct) %>% out_func
+  
+  my_ppc_bars_grouped(data_long$phenotype_value, predicted, group = interaction(sex_fct, data_long$phenotype)) %>% out_func
+  
+
+  age_fct <- factor(if_else(is.na(data_long$age_group), "NA", as.character(data_long$age_group)))
+  my_ppc_bars_grouped(data_long$phenotype_value, predicted, group = age_fct) %>% out_func
+
+  my_ppc_bars_grouped(data_long$phenotype_value, predicted, group = interaction(age_fct, data_long$phenotype)) %>% out_func
+  
 }
 
 plot_gene_phenotype_estimates <- function(fit, data_for_prediction) {
   estimates <- fitted(fit, data_for_prediction, allow_new_levels = TRUE, probs = posterior_interval_bounds, robust = TRUE)
+  estimates50 <- fitted(fit, data_for_prediction, allow_new_levels = TRUE, probs = c(0.25,0.75), robust = TRUE)
   
   
   data_with_prediction <- data_for_prediction %>%
-    cbind(as.tibble(estimates))
+    cbind(as.tibble(estimates)) %>% cbind(as.tibble(estimates50) %>% select(Q25,Q75)) 
+  
   data_with_prediction$lower <- data_with_prediction[,paste0("Q",posterior_interval_bounds[1] * 100)]
   data_with_prediction$upper <- data_with_prediction[,paste0("Q",posterior_interval_bounds[2] * 100)]
   
-  data_with_prediction %>% ggplot(aes(x = gene, y = Estimate, ymin = lower, ymax = upper, color = gene)) + geom_pointrange() + facet_wrap(~phenotype)  
+  data_with_prediction %>% ggplot(aes(x = gene, y = Estimate, ymin = lower, ymax = upper, color = gene)) +
+    geom_linerange() + 
+    geom_linerange(aes(ymin = Q25, ymax = Q75), size = 2) +
+    facet_wrap(~phenotype)  +
+      theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5))
+
 }
 ```
 
 ```{r}
 run_pp_checks(fit_gene_only, data_long)
-```
 
-```{r}
 plot_gene_phenotype_estimates(
   fit_gene_only,
   tibble(gene = genes_to_use) %>%
@@ -141,6 +190,7 @@ plot_gene_phenotype_estimates(
   )
 
 ```
+
 
 # Source
 
@@ -194,7 +244,8 @@ plot_gene_phenotype_differences_estimates <- function(fit, data_for_prediction) 
   data_to_plot %>% ggplot(aes(x = gene, y = Estimate, ymin = lower, ymax = upper, color = gene)) +
     geom_hline(yintercept = 0, color = "darkred")+ 
     geom_linerange(aes(ymin = lower50, ymax = upper50), size = 2) +
-    geom_linerange() + facet_wrap(~phenotype, scales = "free_y")  
+    geom_linerange() + facet_wrap(~phenotype, scales = "free_y")  +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5))
 }
 ```
 ```{r}
