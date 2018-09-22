@@ -43,31 +43,67 @@ data <- read_excel(here("private_data","--META-DATA-5.xlsx"), sheet = "DATA 5") 
          Sex = factor(toupper(Sex)), 
          source = factor(source)
          ) %>%
+  rowid_to_column("ID") %>%  
 
   #Get age categories
   mutate(Age_corr = if_else(Age == "5 month", as.character(5/12), gsub(",",".", Age)),
+         age_numbers = if_else(grepl("^[0-9]*\\.?[0-9]*$",Age_corr), Age_corr, NA_character_) %>% as.numeric(),
          age_group = factor(case_when(
            is.na(Age_corr) ~ NA_character_,
-           !is.na(as.numeric(Age_corr)) ~ 
+           !is.na(age_numbers) ~ 
              case_when(
-               as.numeric(Age_corr) < 10 ~ "0-9",
-               as.numeric(Age_corr) < 20 ~ "10-19",
-               as.numeric(Age_corr) < 30 ~ "20-29",
-               as.numeric(Age_corr) < 40 ~ "30-39",
-               as.numeric(Age_corr) < 50 ~ "40-49",
-               as.numeric(Age_corr) < 60 ~ "50-59",
+               age_numbers < 10 ~ "0-9",
+               age_numbers < 20 ~ "10-19",
+               age_numbers < 30 ~ "20-29",
+               age_numbers < 40 ~ "30-39",
+               age_numbers < 50 ~ "40-49",
+               age_numbers < 60 ~ "50-59",
                TRUE ~ "60+",
              ),
            TRUE ~ Age_corr
            ))
   ) %>%
   
+  #Get age for simpler model where categories are translated
+  mutate(age_numbers_groups_guessed = 
+           case_when(
+            !is.na(age_numbers) ~ age_numbers,
+            is.na(Age_corr) ~ NA_real_,
+            Age_corr == "0-9" ~ 5,
+            Age_corr == "10-19" ~ 15,
+            Age_corr == "20-29" ~ 25,
+            Age_corr == "30-39" ~ 35,
+            Age_corr == "40-49" ~ 45,
+            Age_corr == "50-59" ~ 55,
+            Age_corr == "60+" ~ 65
+          ),
+         age_std_for_model = (age_numbers_groups_guessed - mean(age_numbers_groups_guessed, na.rm=TRUE))/ sd(age_numbers_groups_guessed, na.rm = TRUE)
+        ) %>%
+  
   #Code BBS to help ordering
   mutate(gene = factor(gsub("BBS([0-9])$","BBS0\\1", gene)))
 
 
+if(!all(is.na(data$Age) == is.na(data$age_group))) {
+  stop("Error in age transforms")
+}
+if(!all(is.na(data$Age) == is.na(data$age_numbers_groups_guessed))) {
+  stop("Error in age transforms")
+}
+if(!all(is.na(data$Age) == is.na(data$age_std_for_model))) {
+  stop("Error in age transforms")
+}
+if(!(identical(suppressWarnings(as.numeric(data$Age_corr)), data$age_numbers))) {
+  stop("Error in age transforms")
+}
+
+```
+
+```{r}
 data %>% skim()
 ```
+
+
 
 ```{r}
 data %>% group_by(gene) %>% summarise(count = length(gene))
@@ -77,7 +113,6 @@ data %>% group_by(gene) %>% summarise(count = length(gene))
 ```{r}
 
 data_long_all <- data %>% 
-  rowid_to_column("ID") %>%  
   gather("phenotype","phenotype_value",RD:speech) 
 
 data_long_all %>% group_by(phenotype) %>% summarise(count = sum(!is.na(phenotype_value)), prop = mean(phenotype_value, na.rm = TRUE))
@@ -109,6 +144,8 @@ Zahrnout mensi geny/fenotypy?
 Co dvojí mutace?
 
 Koncept "kdybychom udelali dalsi studii, tak uvidime..."
+
+Missingness fenotypu - at random?
 
 # Gene only
 
@@ -305,6 +342,65 @@ plot_gene_phenotype_differences_estimates(fit_gene_source_sex_NA, data_for_predi
 plot_gene_phenotype_differences_estimates(fit_gene_source_sex_NA, data_for_prediction_gene_source %>% mutate(Sex = "NA"))
 
 ```
+
+
+```{r}
+# formula_multi_gene <- brmsformula(cbind(CI,OBE,PD,RD,REN) ~ 1 + 1||gene, family = "bernoulli")
+# 
+# get_prior(formula_multi_gene, data = data)
+# priors <- c(intercept_prior, sd_prior)
+# 
+# #make_stancode(formula_gene_only, data_long, prior = priors)
+# 
+# fit_multi_gene <- brm(formula_multi_gene, data = data, control = list(adapt_delta = 0.95))
+
+```
+
+# Source + Age as missing data
+
+There are `r sum(is.na(data$age_numbers) & !is.na(data$Age))` rows that only have age category. We have guessed the middle of the respective category to keep the model simple.
+
+The first model is incorrect - separately estimating missing age for each predictor described...
+
+```{r}
+data_long_age <- data_long %>% 
+  mutate(age_mod = if_else(is.na(age_std_for_model), 0, age_std_for_model),
+         guess_age = if_else(is.na(age_std_for_model), 1, 0),
+         ID_for_age = factor(if_else(is.na(age_std_for_model),"No", as.character(ID)))
+  ) 
+
+formula_gene_source_age <- brmsformula(phenotype_value ~ 1 + ((0 + phenotype)|gene) + ((0 + phenotype)||source) + (0 + age_mod||phenotype) + (0 + guess_age || ID_for_age) , family = "bernoulli")
+
+get_prior(formula_gene_source_age, data =data_long_age)
+
+priors <- c(intercept_prior, sd_prior)
+
+#make_stancode(formula_gene_source_age, data_long, prior = priors)
+
+
+
+fit_gene_source_age <- brm(formula_gene_source_age, prior = priors, data = data_long_age, control = list(adapt_delta = 0.95))
+fit_gene_source_age
+
+run_pp_checks(fit_gene_source_age, data_long_age)
+plot_gene_phenotype_differences_estimates(fit_gene_source_age, data_for_prediction_gene_source %>% mutate(age_mod = 0, guess_age = 1))
+
+age_transform <- function(x) {
+  (x - mean(data$age_numbers_groups_guessed, na.rm=TRUE))/ sd(data$age_numbers_groups_guessed, na.rm = TRUE)
+}
+
+plot_gene_phenotype_differences_estimates(fit_gene_source_age, 
+                                          data_for_prediction_gene_source %>% 
+                                            mutate(age_mod = age_transform(10), guess_age = 0))
+plot_gene_phenotype_differences_estimates(fit_gene_source_age, 
+                                          data_for_prediction_gene_source %>% 
+                                            mutate(age_mod = age_transform(30), guess_age = 0))
+plot_gene_phenotype_differences_estimates(fit_gene_source_age, 
+                                          data_for_prediction_gene_source %>% 
+                                            mutate(age_mod = age_transform(50), guess_age = 0))
+
+```
+
 
 The model:
 Individual phenotypes are predicted by:
