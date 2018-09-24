@@ -132,20 +132,34 @@ data_long %>% group_by(gene, phenotype) %>% summarise(count = length(phenotype_v
 
 # K vyreseni
 
-TODO co s pulkami?
+TODO co s pulkami? - konflikt informací z různých studií - ignorovat
 
 Druh korelace?
 Formula 1 + (0+gene)|phenotype - korelace je 8x8, tj. vliv na renalni dispatii je korelovany mezi geny (což nechceme)
+Skupiny genů - v materiálech, zvážit, jestli nezahrnout.
+Korelace genů nás taky zajímají
+Je podivné, že je korelace RD a REN, když RD mají skoro všichni (ověřit, jestli to není problém)
 
 Pohlavi vyresit pres studii?
 
 Zahrnout mensi geny/fenotypy?
+Zajímavý je LIV (viz pptx)
 
 Co dvojí mutace?
 
 Koncept "kdybychom udelali dalsi studii, tak uvidime..."
 
-Missingness fenotypu - at random?
+Missingness fenotypu, veku, pohlavi - at random?
+
+Respektovat strukturu skupin (functional groups):
+- BBSome: 1,2,4,5,7,9, (18 - jen jeden pacient)
+- 3
+- Chaperonins: 6,10,12
+- Others
+
+BBSom se ještě dělí na 1,2+7,4+8,5,9 (ale to ignorovat)
+
+Vymyslet vizualizaci pro párové porovnání
 
 # Gene only
 
@@ -369,7 +383,7 @@ data_long_age <- data_long %>%
          ID_for_age = factor(if_else(is.na(age_std_for_model),"No", as.character(ID)))
   ) 
 
-formula_gene_source_age <- brmsformula(phenotype_value ~ 1 + ((0 + phenotype)|gene) + ((0 + phenotype)||source) + (0 + age_mod||phenotype) + (0 + guess_age || ID_for_age) , family = "bernoulli")
+formula_gene_source_age <- brmsformula(phenotype_value ~ 1 + ((0 + phenotype)|gene) + ((0 + phenotype)||source) + (0 + age_mod||phenotype) + (0 + guess_age || ID_for_age / phenotype) , family = "bernoulli")
 
 get_prior(formula_gene_source_age, data =data_long_age)
 
@@ -409,4 +423,5 @@ Individual phenotypes are predicted by:
   * Sex
   * Study (hierarchical)
 
-TODO: Figure out a way to make phenotypes correlated - maybe have hierarchical MVN priors for the coeffs?
+TODO: 
+pp check for individual mutations
