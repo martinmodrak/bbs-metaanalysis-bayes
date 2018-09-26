@@ -33,6 +33,16 @@ convert_czech_numeric <- function(column) {
   result
 }
 
+
+functional_group_for_gene <- function(gene) {
+  case_when(
+             gene %in% sprintf("BBS%02d",c(1,2,4,5,7,9,18)) ~ "BBSome",
+             gene == "BBS03" ~ "BBS03",
+             gene %in% sprintf("BBS%02d",c(6,10,12)) ~ "Chaperonins",
+             TRUE ~ "Others"
+           )
+}
+
 data <- read_excel(here("private_data","--META-DATA-5.xlsx"), sheet = "DATA 5") %>%
   rename(case_no = "source case n.", mut_nucl = "mu nucl", mut_amino = "principal mutation", mut_type = "mu-type", additional_mutation = "additional mutation", REPROD = "Reprod. organs abnorm") %>%
   select(source, case_no,gene, mut_nucl, mut_amino, mut_type, 
@@ -87,12 +97,7 @@ data <- read_excel(here("private_data","--META-DATA-5.xlsx"), sheet = "DATA 5") 
 
   #Introduce functional groups
   mutate(functional_group = 
-           case_when(
-             gene %in% sprintf("BBS%02d",c(1,2,4,5,7,9,18)) ~ "BBSome",
-             gene == "BBS3" ~ "BBS3",
-             gene %in% sprintf("BBS%02d",c(6,10,12)) ~ "Chaperonins",
-             TRUE ~ "Others"
-           ) %>% factor()
+           functional_group_for_gene(gene) %>% factor()
          ) 
 
 if(!all(is.na(data$Age) == is.na(data$age_group))) {
@@ -134,12 +139,12 @@ data_long_all <- data %>%
 data_long_all %>% group_by(phenotype) %>% summarise(count = sum(!is.na(phenotype_value)), prop = mean(phenotype_value, na.rm = TRUE))
 
 
-phenotypes_to_use <- c("RD","OBE","PD","CI","REN","speech")
-genes_to_use <- sprintf("BBS%02d",1:12)
-
+phenotypes_to_use <- c("RD","OBE","PD","CI","REN","LIV")
+genes_to_show <- data %>% select(gene,functional_group) %>% distinct() %>% filter(functional_group != c("Others"), !(gene %in% c("BBS18"))) %>% get("gene", .)
+functional_groups_to_show <- data$functional_group %>% unique()
 
 data_long <- data_long_all %>%
-  filter(phenotype %in% phenotypes_to_use, gene %in% genes_to_use) %>%
+  filter(phenotype %in% phenotypes_to_use) %>%
   filter(!is.na(phenotype_value)) %>%
   mutate(phenotype_value = as.integer(if_else(phenotype_value == 0, 0 , 1)))
 
@@ -177,8 +182,8 @@ Vymyslet vizualizaci pro párové porovnání
 
 # Gene only
 
-```{r}(
-formula_gene_only <- brmsformula(phenotype_value ~ 1 + ((0 + phenotype)|gene / functional_group) , family = "bernoulli")
+```{r}
+formula_gene_only <- brmsformula(phenotype_value ~ 1 + ((0 + phenotype)||gene / functional_group) , family = "bernoulli")
 
 #get_prior(formula_gene_only, data = data_long)
 priors <- c(intercept_prior, sd_prior)
@@ -236,23 +241,53 @@ plot_gene_phenotype_estimates <- function(fit, data_for_prediction) {
   data_with_prediction$lower <- data_with_prediction[,paste0("Q",posterior_interval_bounds[1] * 100)]
   data_with_prediction$upper <- data_with_prediction[,paste0("Q",posterior_interval_bounds[2] * 100)]
   
-  data_with_prediction %>% ggplot(aes(x = gene, y = Estimate, ymin = lower, ymax = upper, color = gene)) +
+  data_with_prediction %>% ggplot(aes(x = gene, y = Estimate, ymin = lower, ymax = upper, color = functional_group)) +
     geom_linerange() + 
     geom_linerange(aes(ymin = Q25, ymax = Q75), size = 2) +
     facet_wrap(~phenotype)  +
       theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5))
 
 }
+
+plot_functional_group_phenotype_estimates <- function(fit, data_for_prediction) {
+  estimates <- fitted(fit, data_for_prediction, allow_new_levels = TRUE, sample_new_levels = "old_levels", probs = posterior_interval_bounds, robust = TRUE)
+  estimates50 <- fitted(fit, data_for_prediction, allow_new_levels = TRUE, sample_new_levels = "old_levels", probs = c(0.25,0.75), robust = TRUE)
+  
+  
+  data_with_prediction <- data_for_prediction %>%
+    cbind(as.tibble(estimates)) %>% cbind(as.tibble(estimates50) %>% select(Q25,Q75)) 
+  
+  data_with_prediction$lower <- data_with_prediction[,paste0("Q",posterior_interval_bounds[1] * 100)]
+  data_with_prediction$upper <- data_with_prediction[,paste0("Q",posterior_interval_bounds[2] * 100)]
+  
+  data_with_prediction %>% ggplot(aes(x = functional_group, y = Estimate, ymin = lower, ymax = upper, color = functional_group)) +
+    geom_linerange() + 
+    geom_linerange(aes(ymin = Q25, ymax = Q75), size = 2) +
+    facet_wrap(~phenotype)  +
+      theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5))
+
+}
+
 ```
 
 ```{r}
-run_pp_checks(fit_gene_only, data_long)
+#run_pp_checks(fit_gene_only, data_long)
+
+plot_functional_group_phenotype_estimates(
+  fit_gene_only,
+  tibble(functional_group = functional_groups_to_show) %>%
+    crossing(tibble(phenotype = phenotypes_to_use)) %>%
+    mutate(gene = "random_gene")
+  )
+
 
 plot_gene_phenotype_estimates(
   fit_gene_only,
-  tibble(gene = genes_to_use) %>%
+  tibble(gene = genes_to_show) %>%
+    mutate(functional_group = functional_group_for_gene(gene)) %>%
     crossing(tibble(phenotype = phenotypes_to_use)) 
   )
+
 
 ```
 
