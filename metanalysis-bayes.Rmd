@@ -15,10 +15,14 @@ library(tidyverse)
 library(tidybayes)
 library(bayesplot)
 library(brms)
-source(here("plots.R"))
+library(cowplot)
 
 posterior_interval <- 0.95
 posterior_interval_bounds <- c(0.5 * (1 - posterior_interval), 1 - (0.5 * (1 - posterior_interval)))
+
+#The sourced code refers to the above global variables, so has to be here (sorry for the mess)
+source(here("plots.R"))
+
 
 intercept_prior <- prior(normal(0,2), class = Intercept)
 sd_prior <- prior(normal(0,2), class = sd)
@@ -197,69 +201,6 @@ fit_gene_only
 ```
 
 
-```{r}
-my_ppc <- function(fun, ...) {
-  fun(..., prob = posterior_interval, fatten = 1.5, freq = FALSE)
-}
-
-my_ppc_bars <- function(...) {
-  my_ppc(ppc_bars, ...)
-}
-
-my_ppc_bars_grouped <- function(...) {
-  my_ppc(ppc_bars_grouped, ...)
-}
-
-run_pp_checks <- function(fit, data_long, 
-                          types = c("overall","gene","phenotype","functional_group","functional_group_phenotype",
-                                    "sex", "sex_phenotype","age","age_phenotype"), 
-                          out_func = print) {
-  
-  predicted <- posterior_predict(fit) 
-
-  
-  if("overall" %in% types) {
-    my_ppc_bars(data_long$phenotype_value, predicted) %>% out_func
-  }
-  if("gene" %in% types) {
-    my_ppc_bars_grouped(data_long$phenotype_value, predicted, group = data_long$gene) %>% out_func
-  }
-  if("phenotype" %in% types) {
-    my_ppc_bars_grouped(data_long$phenotype_value, predicted, group = data_long$phenotype) %>% out_func
-  }
-
-  if("functional_group" %in% types) {
-    my_ppc_bars_grouped(data_long$phenotype_value, predicted, group = data_long$functional_group) %>% out_func
-  }
-
-  if("functional_group_phenotype" %in% types) {
-    my_ppc_bars_grouped(data_long$phenotype_value, predicted, group = interaction(data_long$functional_group, data_long$phenotype)) %>% out_func
-  }
-  
-  sex_fct <- factor(if_else(is.na(data_long$Sex), "NA", as.character(data_long$Sex)))
-  if("sex" %in% types) {
-    my_ppc_bars_grouped(data_long$phenotype_value, predicted, group = sex_fct) %>% out_func
-  }
-  
-  if("sex_phenotype" %in% types) {
-    my_ppc_bars_grouped(data_long$phenotype_value, predicted, group = interaction(sex_fct, data_long$phenotype)) %>% out_func
-  }
-  
-
-  age_fct <- factor(if_else(is.na(data_long$age_group), "NA", as.character(data_long$age_group)))
-  if("age" %in% types) {
-    my_ppc_bars_grouped(data_long$phenotype_value, predicted, group = age_fct) %>% out_func
-  }
-
-  if("age_phenotype" %in% types) {
-    my_ppc_bars_grouped(data_long$phenotype_value, predicted, group = interaction(age_fct, data_long$phenotype)) %>% out_func
-  }
-  
-}
-
-
-
-```
 
 ```{r}
 #run_pp_checks(fit_gene_only, data_long)
@@ -295,6 +236,8 @@ fit_gene_source
 data_for_prediction_gene_source <- tibble(gene = unique(data_long$gene), source = "new_source") %>%
     crossing(tibble(phenotype = phenotypes_to_use))
 
+data_for_prediction_gene_source_BBSome <- data_for_prediction_gene_source %>% filter(functional_group_for_gene(gene) == "BBSome", gene != "BBS18", phenotype != "LIV")
+
 plot_gene_phenotype_estimates(
   fit_gene_source, data_for_prediction_gene_source %>% filter(gene %in% genes_to_show)
   )
@@ -303,7 +246,9 @@ plot_gene_phenotype_estimates(
 
 ```{r}
 plot_gene_phenotype_differences_estimates(fit_gene_source, data_for_prediction_gene_source, genes_to_show = genes_to_show)
-plot_gene_phenotype_differences_estimates(fit_gene_source, data_for_prediction_gene_source %>% filter(functional_group_for_gene(gene) == "BBSome"))
+plot_gene_phenotype_differences_estimates(fit_gene_source, data_for_prediction_gene_source_BBSome)
+
+plot_pairwise_differences(fit_gene_source, data_for_prediction_gene_source_BBSome)
 ```
 
 ```{r}
@@ -320,7 +265,11 @@ priors <- c(intercept_prior, sd_prior)
 fit_gene_source_nocor <- brm(formula_gene_source_nocor, prior = priors, data = data_long, control = list(adapt_delta = 0.9))
 fit_gene_source_nocor
 run_pp_checks(fit_gene_source_nocor, data_long)
-plot_gene_phenotype_differences_estimates(fit_gene_source_nocor, data_for_prediction_gene_source)
+plot_gene_phenotype_differences_estimates(fit_gene_source_nocor, data_for_prediction_gene_source, genes_to_show = genes_to_show)
+plot_gene_phenotype_differences_estimates(fit_gene_source_nocor, data_for_prediction_gene_source_BBSome)
+
+plot_pairwise_differences(fit_gene_source_nocor, data_for_prediction_gene_source_BBSome)
+
 ```
 
 # Source & Sex - Filtered
