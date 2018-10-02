@@ -143,6 +143,10 @@ data %>% group_by(gene) %>% summarise(count = length(gene))
 
 
 ```{r}
+  phenotypes_to_use <- c("RD","OBE","PD","CI","REN","LIV")
+  genes_to_show <- data %>% select(gene,functional_group) %>% distinct() %>% filter(functional_group != c("Others"), !(gene %in% c("BBS18"))) %>% get("gene", .)
+
+
 data_long_from_data  <- function(data) {
   data_long_all <- data %>% 
     gather("phenotype","phenotype_value",RD:speech) 
@@ -150,8 +154,6 @@ data_long_from_data  <- function(data) {
   data_long_all %>% group_by(phenotype) %>% summarise(count = sum(!is.na(phenotype_value)), prop = mean(phenotype_value, na.rm = TRUE))
   
   
-  phenotypes_to_use <- c("RD","OBE","PD","CI","REN","LIV")
-  genes_to_show <- data %>% select(gene,functional_group) %>% distinct() %>% filter(functional_group != c("Others"), !(gene %in% c("BBS18"))) %>% get("gene", .)
   functional_groups_to_show <- data$functional_group %>% unique()
   
   data_long <- data_long_all %>%
@@ -162,7 +164,7 @@ data_long_from_data  <- function(data) {
   data_long  
 }
 
-
+data_long <- data_long_from_data(data)
 
 data_long %>% group_by(gene, phenotype) %>% summarise(count = length(phenotype_value), prop = mean(phenotype_value))
 ```
@@ -313,7 +315,7 @@ mice_m = 5
 data_mice <- mice(data, m = mice_m, blocks = list("age_std_for_model", "Sex"), predictorMatrix = predictor_matrix)
 data_mice$loggedEvents %>% select(dep, meth, out) %>% distinct()
 
-data_long_mice <- complete(data_mice, "all") %>% map(data_long_from_data)
+data_long_mice <- mice::complete(data_mice, "all") %>% map(data_long_from_data)
 ```
 
 
