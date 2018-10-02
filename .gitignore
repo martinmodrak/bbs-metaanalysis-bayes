@@ -38,3 +38,4 @@ vignettes/*.pdf
 rsconnect/
 
 /private_data/
+.Rproj.user
