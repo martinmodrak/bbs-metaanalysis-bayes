@@ -15,6 +15,8 @@ library(tidyverse)
 library(tidybayes)
 library(bayesplot)
 library(brms)
+source(here("plots.R"))
+
 posterior_interval <- 0.95
 posterior_interval_bounds <- c(0.5 * (1 - posterior_interval), 1 - (0.5 * (1 - posterior_interval)))
 
@@ -183,7 +185,7 @@ Vymyslet vizualizaci pro párové porovnání
 # Gene only
 
 ```{r}
-formula_gene_only <- brmsformula(phenotype_value ~ 1 + ((0 + phenotype)||gene / functional_group) , family = "bernoulli")
+formula_gene_only <- brmsformula(phenotype_value ~ 1 + ((0 + phenotype)|gene) , family = "bernoulli")
 
 #get_prior(formula_gene_only, data = data_long)
 priors <- c(intercept_prior, sd_prior)
@@ -230,55 +232,12 @@ run_pp_checks <- function(fit, data_long, out_func = print) {
   
 }
 
-plot_gene_phenotype_estimates <- function(fit, data_for_prediction) {
-  estimates <- fitted(fit, data_for_prediction, allow_new_levels = TRUE, probs = posterior_interval_bounds, robust = TRUE)
-  estimates50 <- fitted(fit, data_for_prediction, allow_new_levels = TRUE, probs = c(0.25,0.75), robust = TRUE)
-  
-  
-  data_with_prediction <- data_for_prediction %>%
-    cbind(as.tibble(estimates)) %>% cbind(as.tibble(estimates50) %>% select(Q25,Q75)) 
-  
-  data_with_prediction$lower <- data_with_prediction[,paste0("Q",posterior_interval_bounds[1] * 100)]
-  data_with_prediction$upper <- data_with_prediction[,paste0("Q",posterior_interval_bounds[2] * 100)]
-  
-  data_with_prediction %>% ggplot(aes(x = gene, y = Estimate, ymin = lower, ymax = upper, color = functional_group)) +
-    geom_linerange() + 
-    geom_linerange(aes(ymin = Q25, ymax = Q75), size = 2) +
-    facet_wrap(~phenotype)  +
-      theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5))
 
-}
-
-plot_functional_group_phenotype_estimates <- function(fit, data_for_prediction) {
-  estimates <- fitted(fit, data_for_prediction, allow_new_levels = TRUE, sample_new_levels = "old_levels", probs = posterior_interval_bounds, robust = TRUE)
-  estimates50 <- fitted(fit, data_for_prediction, allow_new_levels = TRUE, sample_new_levels = "old_levels", probs = c(0.25,0.75), robust = TRUE)
-  
-  
-  data_with_prediction <- data_for_prediction %>%
-    cbind(as.tibble(estimates)) %>% cbind(as.tibble(estimates50) %>% select(Q25,Q75)) 
-  
-  data_with_prediction$lower <- data_with_prediction[,paste0("Q",posterior_interval_bounds[1] * 100)]
-  data_with_prediction$upper <- data_with_prediction[,paste0("Q",posterior_interval_bounds[2] * 100)]
-  
-  data_with_prediction %>% ggplot(aes(x = functional_group, y = Estimate, ymin = lower, ymax = upper, color = functional_group)) +
-    geom_linerange() + 
-    geom_linerange(aes(ymin = Q25, ymax = Q75), size = 2) +
-    facet_wrap(~phenotype)  +
-      theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5))
-
-}
 
 ```
 
 ```{r}
 #run_pp_checks(fit_gene_only, data_long)
-
-plot_functional_group_phenotype_estimates(
-  fit_gene_only,
-  tibble(functional_group = functional_groups_to_show) %>%
-    crossing(tibble(phenotype = phenotypes_to_use)) %>%
-    mutate(gene = "random_gene")
-  )
 
 
 plot_gene_phenotype_estimates(
@@ -304,52 +263,26 @@ priors <- c(intercept_prior, sd_prior)
 
 fit_gene_source <- brm(formula_gene_source, prior = priors, data = data_long, control = list(adapt_delta = 0.9))
 fit_gene_source
-run_pp_checks(fit_gene_source, data_long)
+#run_pp_checks(fit_gene_source, data_long)
 ```
 
 ```{r}
-data_for_prediction_gene_source <- tibble(gene = genes_to_use, source = "new_source") %>%
+data_for_prediction_gene_source <- tibble(gene = unique(data_long$gene), source = "new_source") %>%
     crossing(tibble(phenotype = phenotypes_to_use))
 
 plot_gene_phenotype_estimates(
-  fit_gene_source, data_for_prediction_gene_source
+  fit_gene_source, data_for_prediction_gene_source %>% filter(gene %in% genes_to_show)
   )
 
-
-
 ```
-```{r}
-plot_gene_phenotype_differences_estimates <- function(fit, data_for_prediction) {
-  fitted_detailed <- fitted(fit, data_for_prediction, summary = FALSE, allow_new_levels = TRUE)
 
-  samples_tidy <- data_for_prediction %>% 
-    cbind(as.tibble(t(fitted_detailed))) %>%
-    gather("sample","value", V1:V4000) 
-    
-  per_phenotype_and_sample_average <- samples_tidy %>%
-    group_by(sample, phenotype) %>% 
-    summarise(avg = mean(value))
-  
-  data_to_plot <- samples_tidy %>% 
-    inner_join(per_phenotype_and_sample_average, by = c("phenotype" = "phenotype", "sample" = "sample")) %>%
-    mutate(relative = value - avg) %>%
-    group_by(phenotype, gene) %>%
-    summarise(Estimate = median(relative), 
-              lower = quantile(relative, posterior_interval_bounds[1]),
-              upper = quantile(relative, posterior_interval_bounds[2]),
-              lower50 = quantile(relative, 0.25),
-              upper50 = quantile(relative, 0.75)
-              )
-  
-  data_to_plot %>% ggplot(aes(x = gene, y = Estimate, ymin = lower, ymax = upper, color = gene)) +
-    geom_hline(yintercept = 0, color = "darkred")+ 
-    geom_linerange(aes(ymin = lower50, ymax = upper50), size = 2) +
-    geom_linerange() + facet_wrap(~phenotype, scales = "free_y")  +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5))
-}
-```
 ```{r}
-plot_gene_phenotype_differences_estimates(fit_gene_source, data_for_prediction_gene_source)
+plot_gene_phenotype_differences_estimates(fit_gene_source, data_for_prediction_gene_source, genes_to_show = genes_to_show)
+plot_gene_phenotype_differences_estimates(fit_gene_source, data_for_prediction_gene_source %>% filter(functional_group_for_gene(gene) == "BBSome"))
+```
+
+```{r}
+
 ```
 
 # Source, no phenotype correlations
@@ -474,3 +407,8 @@ Individual phenotypes are predicted by:
 
 TODO: 
 pp check for individual mutations
+
+```{r}
+sessionInfo()
+```
+
