@@ -6,15 +6,16 @@ output: html_notebook
 
 ```{r setup}
 library(rstan)
+library(brms)
 options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
 library(skimr)
 library(readxl)
 library(here)
+library(mice)
 library(tidyverse)
 library(tidybayes)
 library(bayesplot)
-library(brms)
 library(cowplot)
 
 posterior_interval <- 0.95
@@ -119,6 +120,10 @@ if(!(identical(suppressWarnings(as.numeric(data$Age_corr)), data$age_numbers))) 
   stop("Error in age transforms")
 }
 
+#For some reasone this cannot be done with dplyr
+data$hyposmia_anosmia = data$`hyposmia/anosmia`
+data$`hyposmia/anosmia` = NULL
+
 ```
 
 ```{r}
@@ -138,21 +143,26 @@ data %>% group_by(gene) %>% summarise(count = length(gene))
 
 
 ```{r}
+data_long_from_data  <- function(data) {
+  data_long_all <- data %>% 
+    gather("phenotype","phenotype_value",RD:speech) 
+  
+  data_long_all %>% group_by(phenotype) %>% summarise(count = sum(!is.na(phenotype_value)), prop = mean(phenotype_value, na.rm = TRUE))
+  
+  
+  phenotypes_to_use <- c("RD","OBE","PD","CI","REN","LIV")
+  genes_to_show <- data %>% select(gene,functional_group) %>% distinct() %>% filter(functional_group != c("Others"), !(gene %in% c("BBS18"))) %>% get("gene", .)
+  functional_groups_to_show <- data$functional_group %>% unique()
+  
+  data_long <- data_long_all %>%
+    filter(phenotype %in% phenotypes_to_use) %>%
+    filter(!is.na(phenotype_value)) %>%
+    mutate(phenotype_value = as.integer(if_else(phenotype_value == 0, 0 , 1)))
+  
+  data_long  
+}
 
-data_long_all <- data %>% 
-  gather("phenotype","phenotype_value",RD:speech) 
 
-data_long_all %>% group_by(phenotype) %>% summarise(count = sum(!is.na(phenotype_value)), prop = mean(phenotype_value, na.rm = TRUE))
-
-
-phenotypes_to_use <- c("RD","OBE","PD","CI","REN","LIV")
-genes_to_show <- data %>% select(gene,functional_group) %>% distinct() %>% filter(functional_group != c("Others"), !(gene %in% c("BBS18"))) %>% get("gene", .)
-functional_groups_to_show <- data$functional_group %>% unique()
-
-data_long <- data_long_all %>%
-  filter(phenotype %in% phenotypes_to_use) %>%
-  filter(!is.na(phenotype_value)) %>%
-  mutate(phenotype_value = as.integer(if_else(phenotype_value == 0, 0 , 1)))
 
 data_long %>% group_by(gene, phenotype) %>% summarise(count = length(phenotype_value), prop = mean(phenotype_value))
 ```
@@ -292,82 +302,64 @@ plot_gene_phenotype_differences_estimates(fit_gene_source_sex, data_for_predicti
 
 ```
 
-# Source & Sex - NA separate
+# Imputation with mice
 
 ```{r}
-data_long_with_sex_NA <- data_long %>% mutate(Sex = if_else(is.na(Sex), "NA", as.character(Sex)) %>% factor)
+predictor_matrix <- matrix(0, nrow = 2, ncol = ncol(data))
+colnames(predictor_matrix) <- names(data)
+predictor_matrix[, c("gene")] <- 1
 
-formula_gene_source_sex_NA <- brmsformula(phenotype_value ~ 1 + ((0 + phenotype)|gene) + ((0 + phenotype)||source + Sex) , family = "bernoulli")
+mice_m = 5
+data_mice <- mice(data, m = mice_m, blocks = list("age_std_for_model", "Sex"), predictorMatrix = predictor_matrix)
+data_mice$loggedEvents %>% select(dep, meth, out) %>% distinct()
 
-#get_prior(formula_gene_only, data = data_long)
+data_long_mice <- complete(data_mice, "all") %>% map(data_long_from_data)
+```
+
+
+# Source & Sex - Imputed
+
+```{r}
 priors <- c(intercept_prior, sd_prior)
 
-#make_stancode(formula_gene_only, data_long, prior = priors)
 
-fit_gene_source_sex_NA <- brm(formula_gene_source_sex_NA, prior = priors, data = data_long_with_sex_NA, control = list(adapt_delta = 0.95))
-fit_gene_source_sex_NA
-run_pp_checks(fit_gene_source_sex_NA, data_long_with_sex_NA)
-plot_gene_phenotype_differences_estimates(fit_gene_source_sex_NA, data_for_prediction_gene_source %>% mutate(Sex = "M"))
-plot_gene_phenotype_differences_estimates(fit_gene_source_sex_NA, data_for_prediction_gene_source %>% mutate(Sex = "F"))
-plot_gene_phenotype_differences_estimates(fit_gene_source_sex_NA, data_for_prediction_gene_source %>% mutate(Sex = "NA"))
+fit_gene_source_sex_imputed <- brm_multiple(formula_gene_source_sex, prior = priors, data = data_long_mice, control = list(adapt_delta = 0.95))
+fit_gene_source_sex_imputed
+run_pp_checks(fit_gene_source_sex_imputed, data_long_mice[[1]])
+plot_gene_phenotype_differences_estimates(fit_gene_source_sex_imputed, data_for_prediction_gene_source %>% mutate(Sex = "M"))
+plot_gene_phenotype_differences_estimates(fit_gene_source_sex_imputed, data_for_prediction_gene_source %>% mutate(Sex = "F"))
 
 ```
 
 
-```{r}
-# formula_multi_gene <- brmsformula(cbind(CI,OBE,PD,RD,REN) ~ 1 + 1||gene, family = "bernoulli")
-# 
-# get_prior(formula_multi_gene, data = data)
-# priors <- c(intercept_prior, sd_prior)
-# 
-# #make_stancode(formula_gene_only, data_long, prior = priors)
-# 
-# fit_multi_gene <- brm(formula_multi_gene, data = data, control = list(adapt_delta = 0.95))
-
-```
-
-# Source + Age as missing data
+# Source + Age imputed
 
 There are `r sum(is.na(data$age_numbers) & !is.na(data$Age))` rows that only have age category. We have guessed the middle of the respective category to keep the model simple.
 
-The first model is incorrect - separately estimating missing age for each predictor described...
 
 ```{r}
-data_long_age <- data_long %>% 
-  mutate(age_mod = if_else(is.na(age_std_for_model), 0, age_std_for_model),
-         guess_age = if_else(is.na(age_std_for_model), 1, 0),
-         ID_for_age = factor(if_else(is.na(age_std_for_model),"No", as.character(ID)))
-  ) 
-
-formula_gene_source_age <- brmsformula(phenotype_value ~ 1 + ((0 + phenotype)|gene) + ((0 + phenotype)||source) + (0 + age_mod||phenotype) + (0 + guess_age || ID_for_age / phenotype) , family = "bernoulli")
-
-get_prior(formula_gene_source_age, data =data_long_age)
+formula_gene_source_age <- brmsformula(phenotype_value ~ 1 + ((0 + phenotype)|gene) + ((0 + phenotype)||source) + (0 + age_std_for_model||phenotype), family = "bernoulli")
 
 priors <- c(intercept_prior, sd_prior)
 
-#make_stancode(formula_gene_source_age, data_long, prior = priors)
+fit_gene_source_age_imputed <- brm_multiple(formula_gene_source_age, prior = priors, data = data_long_mice, control = list(adapt_delta = 0.95))
+fit_gene_source_age_imputed
 
-
-
-fit_gene_source_age <- brm(formula_gene_source_age, prior = priors, data = data_long_age, control = list(adapt_delta = 0.95))
-fit_gene_source_age
-
-run_pp_checks(fit_gene_source_age, data_long_age)
-plot_gene_phenotype_differences_estimates(fit_gene_source_age, data_for_prediction_gene_source %>% mutate(age_mod = 0, guess_age = 1))
+run_pp_checks(fit_gene_source_age_imputed, data_long_mice[[1]])
 
 age_transform <- function(x) {
   (x - mean(data$age_numbers_groups_guessed, na.rm=TRUE))/ sd(data$age_numbers_groups_guessed, na.rm = TRUE)
 }
 
-plot_gene_phenotype_differences_estimates(fit_gene_source_age, 
+plot_gene_phenotype_differences_estimates(fit_gene_source_age_imputed, 
                                           data_for_prediction_gene_source %>% 
-                                            mutate(age_mod = age_transform(10), guess_age = 0))
-plot_gene_phenotype_differences_estimates(fit_gene_source_age, 
+                                            mutate(age_std_for_model = age_transform(10)))
+plot_gene_phenotype_differences_estimates(fit_gene_source_age_imputed, 
                                           data_for_prediction_gene_source %>% 
-                                            mutate(age_mod = age_transform(30), guess_age = 0))
-plot_gene_phenotype_differences_estimates(fit_gene_source_age, 
+                                            mutate(age_std_for_model = age_transform(30)))
+plot_gene_phenotype_differences_estimates(fit_gene_source_age_imputed, 
                                           data_for_prediction_gene_source %>% 
-                                            mutate(age_mod = age_transform(50), guess_age = 0))
+                                            mutate(age_std_for_model = age_transform(50)))
 
 ```
 
