@@ -15,7 +15,7 @@ run_pp_checks <- function(fit, data_long,
                                     "sex", "sex_phenotype","age","age_phenotype"), 
                           out_func = print) {
   
-  predicted <- posterior_predict(fit) 
+  predicted <- posterior_predict(fit, n_samples = 1000) 
   
   
   if("overall" %in% types) {

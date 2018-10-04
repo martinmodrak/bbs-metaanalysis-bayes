@@ -38,4 +38,5 @@ vignettes/*.pdf
 rsconnect/
 
 /private_data/
+/stored_fits/
 .Rproj.user
