@@ -114,7 +114,7 @@ plot_gene_phenotype_differences_estimates <- function(fit, data_for_prediction, 
     theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5))
 }
 
-plot_pairwise_differences <- function(fit, data_for_prediction, plot_types = c("cor","heatmap_min","heatmap_max","heatmap_p", "linerange","linerange_all"), out_func = print) {
+plot_pairwise_differences <- function(fit, data_for_prediction, plot_types = c("cor","heatmap_min","heatmap_max","heatmap_p", "linerange","linerange_all","linerange_all2"), out_func = print) {
   samples_tidy <- get_tidy_samples(fit, data_for_prediction) 
   samples_diff <- samples_tidy %>% 
     select(-source) %>%
@@ -168,46 +168,28 @@ plot_pairwise_differences <- function(fit, data_for_prediction, plot_types = c("
   }
   
   if("heatmap_min" %in% plot_types) {
-    lims <- c(-max(abs(data_for_diff$min_probable_difference)), max(abs(data_for_diff$min_probable_difference)))
-    for(ph in unique(data_for_prediction$phenotype)) {
-      data_for_diff_ph <- data_for_diff %>% filter(phenotype == ph)
-      
-      cutoff <- 0.001
-      genes_to_include <- data_for_diff_ph %>% group_by(gene.x) %>%
-        summarise(include = any(abs(min_probable_difference) > cutoff)) %>%
-        filter(include) %>%
-        get("gene.x",.)
-      
-      if(length(genes_to_include) == 0) {
-        out_func(paste0("No probable differences larger than ", cutoff," for ", ph))
-        next
-      }
-      
-      p <- data_for_diff_ph %>% 
-        filter(gene.x %in% genes_to_include, gene.y %in% genes_to_include) %>% 
-        ggplot(aes(x = gene.x, y = gene.y, fill = min_probable_difference)) +
-          geom_tile(width = 1, height = 1) +
-          scale_fill_gradient2( limits = lims, low = "#ca0020", high = "#0571b0", mid = "#f7f7f7") +
-          theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5)) +
-          ggtitle(ph)
-      out_func(p)
-    }
+
+    p <- data_for_diff %>% 
+      ggplot(aes(x = gene.x, y = gene.y, fill = min_probable_difference)) +
+        geom_tile(width = 1, height = 1) +
+        scale_fill_gradient2(low = "#ca0020", high = "#0571b0", mid = "#f7f7f7") +
+        theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5)) +
+        facet_wrap(~phenotype)
+    out_func(p)
+    
   }
   
 
   
   if("heatmap_max" %in% plot_types) {
     lims <- c(0, 1) #max(data_for_diff$max_probable_difference))
-    for(ph in unique(data_for_prediction$phenotype)) {
-      
-      p <- data_for_diff %>% filter(phenotype == ph) %>% 
-        ggplot(aes(x = gene.x, y = gene.y, fill = max_probable_difference)) +
-        geom_tile(width = 1, height = 1) +
-        scale_fill_distiller(palette = "Spectral", limits = lims) +
-        theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5)) +
-        ggtitle(ph)
-      out_func(p)
-    }
+    p <- data_for_diff %>%  
+      ggplot(aes(x = gene.x, y = gene.y, fill = max_probable_difference)) +
+      geom_tile(width = 1, height = 1) +
+      scale_fill_distiller(palette = "Spectral", limits = lims) +
+      theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5)) +
+      facet_wrap(~phenotype)
+    out_func(p)
   }
   
   if("linerange" %in% plot_types) {
@@ -224,8 +206,23 @@ plot_pairwise_differences <- function(fit, data_for_prediction, plot_types = c("
       out_func(p)
     }
   }
-  
+
   if("linerange_all" %in% plot_types) {
+      p <- data_for_diff %>% 
+        ggplot() + 
+        geom_vline(xintercept = 0, color = "darkred") +
+        # geom_segment(aes(x = lower, xend = upper), y = 0.5, yend = 0.5) + 
+        # geom_segment(aes(x = lower50, xend = upper50), y = 0.5, yend = 0.5, size = 2) +
+        geom_segment(aes(x = lower, xend = upper, y = gene.x, yend = gene.x)) + 
+        geom_segment(aes(x = lower50, xend = upper50, y = gene.x, yend = gene.x), size = 2) +
+        facet_grid(phenotype ~ gene.y)  
+        
+      out_func(p)
+  
+  }
+  
+    
+  if("linerange_all2" %in% plot_types) {
     p <- data_for_diff %>% 
       ggplot(aes(y = phenotype, yend = phenotype, color = phenotype)) + 
       geom_vline(xintercept = 0, color = "darkred") +
