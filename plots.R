@@ -79,11 +79,11 @@ plot_gene_phenotype_estimates <- function(fit, data_for_prediction) {
 
 
 get_tidy_samples <- function(fit, data_for_prediction) {
-  fitted_detailed <- fitted(fit, data_for_prediction, summary = FALSE, allow_new_levels = TRUE)
+  fitted_detailed <- fitted(fit, data_for_prediction, summary = FALSE, allow_new_levels = TRUE, nsamples = 1000)
   
   samples_tidy <- data_for_prediction %>% 
     cbind(as.tibble(t(fitted_detailed))) %>%
-    gather("sample","value", V1:V4000) 
+    gather("sample","value", V1:V1000) 
   
 }
 
@@ -114,7 +114,7 @@ plot_gene_phenotype_differences_estimates <- function(fit, data_for_prediction, 
     theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5))
 }
 
-plot_pairwise_differences <- function(fit, data_for_prediction, plot_types = c("cor","heatmap_min","heatmap_max","linerange","linerange_all"), out_func = print) {
+plot_pairwise_differences <- function(fit, data_for_prediction, plot_types = c("cor","heatmap_min","heatmap_max","heatmap_p", "linerange","linerange_all"), out_func = print) {
   samples_tidy <- get_tidy_samples(fit, data_for_prediction) 
   samples_diff <- samples_tidy %>% 
     select(-source) %>%
@@ -141,16 +141,32 @@ plot_pairwise_differences <- function(fit, data_for_prediction, plot_types = c("
               lower = quantile(difference, posterior_interval_bounds[1]),
               upper = quantile(difference, posterior_interval_bounds[2]),
               lower50 = quantile(difference, 0.25),
-              upper50 = quantile(difference, 0.75)) %>%
+              upper50 = quantile(difference, 0.75),
+              p_positive = mean(difference > 0),
+              p_negative = mean(difference < 0)) %>%
     mutate(min_probable_difference = case_when(
         sign(lower) != sign(upper) ~ 0,
         lower < 0 ~ upper,
         lower >= 0 ~ lower,
         TRUE ~ NA_real_ #Should not happen
       ),
-      max_probable_difference = pmax(abs(lower), abs(upper))
+      max_probable_difference = pmax(abs(lower), abs(upper)),
+      p_diff = if_else(p_positive > p_negative, p_positive, -p_negative)
     )
 
+  if("heatmap_p" %in% plot_types) {
+    lims <- c(-1, 1) 
+    p <- data_for_diff  %>% 
+      ggplot(aes(x = gene.x, y = gene.y, fill = p_diff)) +
+      geom_tile(width = 1, height = 1) +
+      scale_fill_gradientn(limits = lims, 
+                           colours = c("#ca0020","#f4a582","#f7f7f7","#f7f7f7","#92c5de","#0571b0"),
+                           values = (c(-1,-0.75,-0.5,0.5,0.75,1) + 1) / 2) +
+      theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5)) +
+      facet_wrap(~phenotype)
+    out_func(p)
+  }
+  
   if("heatmap_min" %in% plot_types) {
     lims <- c(-max(abs(data_for_diff$min_probable_difference)), max(abs(data_for_diff$min_probable_difference)))
     for(ph in unique(data_for_prediction$phenotype)) {
@@ -171,15 +187,17 @@ plot_pairwise_differences <- function(fit, data_for_prediction, plot_types = c("
         filter(gene.x %in% genes_to_include, gene.y %in% genes_to_include) %>% 
         ggplot(aes(x = gene.x, y = gene.y, fill = min_probable_difference)) +
           geom_tile(width = 1, height = 1) +
-          scale_fill_gradient2( limits = lims) +
+          scale_fill_gradient2( limits = lims, low = "#ca0020", high = "#0571b0", mid = "#f7f7f7") +
           theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5)) +
           ggtitle(ph)
       out_func(p)
     }
   }
   
+
+  
   if("heatmap_max" %in% plot_types) {
-    lims <- c(0, max(data_for_diff$max_probable_difference))
+    lims <- c(0, 1) #max(data_for_diff$max_probable_difference))
     for(ph in unique(data_for_prediction$phenotype)) {
       
       p <- data_for_diff %>% filter(phenotype == ph) %>% 
@@ -197,9 +215,11 @@ plot_pairwise_differences <- function(fit, data_for_prediction, plot_types = c("
       p <- data_for_diff %>% filter(phenotype == ph) %>%
         ggplot() + 
         geom_vline(xintercept = 0, color = "darkred") +
-        geom_segment(aes(x = lower, xend = upper), y = 0.5, yend = 0.5) + 
-        geom_segment(aes(x = lower50, xend = upper50), y = 0.5, yend = 0.5, size = 2) +
-        facet_grid(gene.x ~ gene.y)  +
+        # geom_segment(aes(x = lower, xend = upper), y = 0.5, yend = 0.5) + 
+        # geom_segment(aes(x = lower50, xend = upper50), y = 0.5, yend = 0.5, size = 2) +
+        geom_segment(aes(x = lower, xend = upper, y = gene.x, yend = gene.x)) + 
+        geom_segment(aes(x = lower50, xend = upper50, y = gene.x, yend = gene.x), size = 2) +
+        facet_grid( ~ gene.y)  +
         ggtitle(ph)
       out_func(p)
     }

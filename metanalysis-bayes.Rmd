@@ -3,6 +3,23 @@ title: "Bayesian Metanalysis"
 output: html_notebook
 ---
 
+TODO: 
+- pp check for individual mutations
+- vyfiltrovat, ktere pp check provadet
+- individual dif per phenotype - spojit do jednoho plotu
+- BBS08
+
+linerange: barva pro ty, co nepreshauji 0
+- srovnani pheno po radcich je prehlednejsi
+- podivat se na "divne" geny (případně vyhodit)
+
+Text:
+ - muj model (cca 1 odstavec) + do supplementu
+ - kratky popis error baru pro proporce
+ 
+- korelace 4-8
+
+
 
 ```{r setup}
 library(rstan)
