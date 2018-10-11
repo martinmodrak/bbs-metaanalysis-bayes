@@ -9,6 +9,14 @@ TODO:
 - individual dif per phenotype - spojit do jednoho plotu
 - BBS08
 - nefiltrovat phenotype
+- vazti jen k zobrazenym
+- 8 fenotypu  (+ reproductive, heart)
+- line range základní - sumarizovat pres funkcni skupiny, brát, "náhodnou mutaci pro pacienta", pak jen BBSome
+- osy nechat zvlášt pro fenotyp
+- stejně popisovat osy (stejný formát čísla)
+- obarvit dle funkčních skupin (i když je jen jedna skupina) + zvýraznit rozdíly mimo 0
+- vše na odds ratio
+- dodat obrázky do 19. 10.
 
 linerange: barva pro ty, co nepreshauji 0
 - srovnani pheno po radcich je prehlednejsi
