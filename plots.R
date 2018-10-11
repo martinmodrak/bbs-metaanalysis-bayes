@@ -83,7 +83,8 @@ get_tidy_samples <- function(fit, data_for_prediction) {
   
   samples_tidy <- data_for_prediction %>% 
     cbind(as.tibble(t(fitted_detailed))) %>%
-    gather("sample","value", V1:V1000) 
+    gather("sample","value", V1:V1000) %>%
+    mutate(odds = value/(1-value))
   
 }
 
@@ -93,12 +94,13 @@ plot_gene_phenotype_differences_estimates <- function(fit, data_for_prediction, 
   
   per_phenotype_and_sample_average <- samples_tidy %>%
     group_by(sample, phenotype) %>% 
-    summarise(avg = mean(value))
+    summarise(avg = mean(value), avg_odds = avg/(1-avg))
   
   data_to_plot <- samples_tidy %>% 
     filter(gene %in% genes_to_show) %>%
     inner_join(per_phenotype_and_sample_average, by = c("phenotype" = "phenotype", "sample" = "sample")) %>%
-    mutate(relative = value - avg) %>%
+    #mutate(relative = value - avg) %>%
+    mutate(relative = odds / avg_odds) %>%
     group_by(phenotype, gene) %>%
     summarise(Estimate = median(relative), 
               lower = quantile(relative, posterior_interval_bounds[1]),
@@ -108,9 +110,10 @@ plot_gene_phenotype_differences_estimates <- function(fit, data_for_prediction, 
     )
   
   data_to_plot %>% ggplot(aes(x = gene, y = Estimate, ymin = lower, ymax = upper, color = gene)) +
-    geom_hline(yintercept = 0, color = "darkred")+ 
+    geom_hline(yintercept = 1, color = "darkred")+ 
     geom_linerange(aes(ymin = lower50, ymax = upper50), size = 2) +
-    geom_linerange() + facet_wrap(~phenotype, scales = "free_y")  +
+    geom_linerange() + facet_wrap(~phenotype, scales = "free_y")  + 
+    scale_y_log10("Odds ratio") +
     theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5))
 }
 
