@@ -89,6 +89,9 @@ get_tidy_samples <- function(fit, data_for_prediction) {
 }
 
 
+simple_num_format <- function(x) {format(x, digits = 1, scientific = FALSE, drop0trailing = TRUE)}
+
+
 plot_gene_phenotype_differences_estimates <- function(fit, data_for_prediction, genes_to_show = unique(data_for_prediction$gene)) {
   samples_tidy <- get_tidy_samples(fit, data_for_prediction)
   
@@ -113,16 +116,16 @@ plot_gene_phenotype_differences_estimates <- function(fit, data_for_prediction, 
     geom_hline(yintercept = 1, color = "darkred")+ 
     geom_linerange(aes(ymin = lower50, ymax = upper50), size = 2) +
     geom_linerange() + facet_wrap(~phenotype, scales = "free_y")  + 
-    scale_y_log10("Odds ratio") +
+    scale_y_log10("Odds ratio", labels = simple_num_format) +
     theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5))
 }
 
-plot_pairwise_differences <- function(fit, data_for_prediction, plot_types = c("cor","heatmap_min","heatmap_max","heatmap_p", "linerange","linerange_all","linerange_all2"), out_func = print) {
+plot_pairwise_differences <- function(fit, data_for_prediction, plot_types = c("heatmap_min","heatmap_max","heatmap_p","linerange_all"), out_func = print) {
   samples_tidy <- get_tidy_samples(fit, data_for_prediction) 
   samples_diff <- samples_tidy %>% 
     select(-source) %>%
     inner_join(samples_tidy %>% select(-source), by = c("sample" = "sample","phenotype" = "phenotype")) %>%
-    mutate(difference = value.x - value.y)
+    mutate(odds_ratio = (value.x / (1 - value.x)) / (value.y / (1 - value.y)))
   
   
   if("cor" %in% plot_types) {
@@ -140,21 +143,30 @@ plot_pairwise_differences <- function(fit, data_for_prediction, plot_types = c("
   
   data_for_diff <- samples_diff %>% 
     group_by(gene.x, gene.y, phenotype) %>%
-    summarise(Estimate = median(difference), 
-              lower = quantile(difference, posterior_interval_bounds[1]),
-              upper = quantile(difference, posterior_interval_bounds[2]),
-              lower50 = quantile(difference, 0.25),
-              upper50 = quantile(difference, 0.75),
-              p_positive = mean(difference > 0),
-              p_negative = mean(difference < 0)) %>%
-    mutate(min_probable_difference = case_when(
-        sign(lower) != sign(upper) ~ 0,
-        lower < 0 ~ upper,
-        lower >= 0 ~ lower,
+    summarise(Estimate = median(odds_ratio), 
+              lower = quantile(odds_ratio, posterior_interval_bounds[1]),
+              upper = quantile(odds_ratio, posterior_interval_bounds[2]),
+              lower50 = quantile(odds_ratio, 0.25),
+              upper50 = quantile(odds_ratio, 0.75),
+              p_positive = mean(odds_ratio > 1),
+              p_negative = mean(odds_ratio < 1)) %>%
+    ungroup() %>%
+    filter(gene.x != gene.y) %>%
+    mutate(min_probable_OR = case_when(
+      
+        ((lower > 1) != (upper > 1)) ~ 1,
+        lower < 1 ~ upper,
+        lower > 1 ~ lower,
         TRUE ~ NA_real_ #Should not happen
       ),
-      max_probable_difference = pmax(abs(lower), abs(upper)),
-      p_diff = if_else(p_positive > p_negative, p_positive, -p_negative)
+      max_probable_OR = pmax(lower, upper, 1/lower, 1/upper),
+      p_diff = if_else(p_positive > p_negative, p_positive, -p_negative),
+      result_category = case_when(
+        ((lower > 1) == (upper > 1)) ~ "95_excl",
+        ((lower50 > 1) == (upper50 > 1)) ~ "50_excl",
+        TRUE ~ "none"
+      ),
+      result_category = factor(result_category, levels = c("none","50_excl", "95_excl"))
     )
 
   if("heatmap_p" %in% plot_types) {
@@ -166,18 +178,18 @@ plot_pairwise_differences <- function(fit, data_for_prediction, plot_types = c("
                            colours = c("#ca0020","#f4a582","#f7f7f7","#f7f7f7","#92c5de","#0571b0"),
                            values = (c(-1,-0.75,-0.5,0.5,0.75,1) + 1) / 2) +
       theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5)) +
-      facet_wrap(~phenotype)
+      facet_wrap(~phenotype, ncol = 4)
     out_func(p)
   }
   
   if("heatmap_min" %in% plot_types) {
 
     p <- data_for_diff %>% 
-      ggplot(aes(x = gene.x, y = gene.y, fill = min_probable_difference)) +
+      ggplot(aes(x = gene.x, y = gene.y, fill = min_probable_OR)) +
         geom_tile(width = 1, height = 1) +
-        scale_fill_gradient2(low = "#ca0020", high = "#0571b0", mid = "#f7f7f7") +
+        scale_fill_gradient2(low = "#ca0020", high = "#0571b0", mid = "#f7f7f7", trans = "log10") +
         theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5)) +
-        facet_wrap(~phenotype)
+        facet_wrap(~phenotype, ncol = 4)
     out_func(p)
     
   }
@@ -185,40 +197,47 @@ plot_pairwise_differences <- function(fit, data_for_prediction, plot_types = c("
 
   
   if("heatmap_max" %in% plot_types) {
-    lims <- c(0, 1) #max(data_for_diff$max_probable_difference))
     p <- data_for_diff %>%  
-      ggplot(aes(x = gene.x, y = gene.y, fill = max_probable_difference)) +
+      ggplot(aes(x = gene.x, y = gene.y, fill = max_probable_OR)) +
       geom_tile(width = 1, height = 1) +
-      scale_fill_distiller(palette = "Spectral", limits = lims) +
+      scale_fill_distiller(palette = "Spectral", trans = "log10") +
       theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5)) +
-      facet_wrap(~phenotype)
+      facet_wrap(~phenotype, ncol = 4)
     out_func(p)
   }
+  
+  
+  scale_linerange <- scale_x_log10(labels = simple_num_format)
   
   if("linerange" %in% plot_types) {
     for(ph in unique(data_for_prediction$phenotype)) {
       p <- data_for_diff %>% filter(phenotype == ph) %>%
-        ggplot() + 
-        geom_vline(xintercept = 0, color = "darkred") +
+        ggplot(aes(color = result_category)) + 
+        geom_vline(xintercept = 1, color = "darkred") +
         # geom_segment(aes(x = lower, xend = upper), y = 0.5, yend = 0.5) + 
         # geom_segment(aes(x = lower50, xend = upper50), y = 0.5, yend = 0.5, size = 2) +
         geom_segment(aes(x = lower, xend = upper, y = gene.x, yend = gene.x)) + 
         geom_segment(aes(x = lower50, xend = upper50, y = gene.x, yend = gene.x), size = 2) +
+        scale_linerange +
         facet_grid( ~ gene.y)  +
         ggtitle(ph)
       out_func(p)
     }
   }
 
+  theme_linerange_all <- theme(axis.text=element_text(size=8), strip.text = element_text(size = 9))
   if("linerange_all" %in% plot_types) {
       p <- data_for_diff %>% 
-        ggplot() + 
-        geom_vline(xintercept = 0, color = "darkred") +
+        ggplot(aes(color = result_category)) + 
+        geom_vline(xintercept = 1, color = "darkred") +
         # geom_segment(aes(x = lower, xend = upper), y = 0.5, yend = 0.5) + 
         # geom_segment(aes(x = lower50, xend = upper50), y = 0.5, yend = 0.5, size = 2) +
         geom_segment(aes(x = lower, xend = upper, y = gene.x, yend = gene.x)) + 
         geom_segment(aes(x = lower50, xend = upper50, y = gene.x, yend = gene.x), size = 2) +
-        facet_grid(phenotype ~ gene.y)  
+        scale_linerange +
+        scale_color_manual(values = c("#303030", "#377eb8","#e41a1c")) +
+        facet_grid(phenotype ~ gene.y)  +
+        theme_linerange_all
         
       out_func(p)
   
@@ -227,11 +246,14 @@ plot_pairwise_differences <- function(fit, data_for_prediction, plot_types = c("
     
   if("linerange_all2" %in% plot_types) {
     p <- data_for_diff %>% 
-      ggplot(aes(y = phenotype, yend = phenotype, color = phenotype)) + 
+      ggplot(aes(y = phenotype, yend = phenotype, color = result_category)) + 
       geom_vline(xintercept = 0, color = "darkred") +
       geom_segment(aes(x = lower, xend = upper)) + 
       geom_segment(aes(x = lower50, xend = upper50), size = 2) +
-      facet_grid(gene.x ~ gene.y)
+      scale_linerange +
+      scale_color_manual(values = c("#303030", "#377eb8","#e41a1c")) +
+      facet_grid(gene.x ~ gene.y) +
+      theme_linerange_all
     out_func(p)
   }  
 }
