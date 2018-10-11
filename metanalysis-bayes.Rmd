@@ -8,6 +8,7 @@ TODO:
 - vyfiltrovat, ktere pp check provadet
 - individual dif per phenotype - spojit do jednoho plotu
 - BBS08
+- nefiltrovat phenotype
 
 linerange: barva pro ty, co nepreshauji 0
 - srovnani pheno po radcich je prehlednejsi
@@ -313,7 +314,37 @@ plot_gene_phenotype_differences_estimates(fit_gene_source_genecor, data_for_pred
 plot_pairwise_differences(fit_gene_source_genecor, data_for_prediction_gene_source_BBSome)
 
 ```
+# Source, narrower priors
 
+```{r}
+priors <- c(prior(normal(0,1), class = Intercept), prior(normal(0,1), class = sd))
+
+fit_gene_source_narrow <- brm(formula_gene_source, prior = priors, data = data_long, control = list(adapt_delta = 0.9),
+                     file = here(stored_fits_dir,"gene_source_narrow"))
+fit_gene_source_narrow
+#run_pp_checks(fit_gene_source_nocor, data_long)
+plot_gene_phenotype_differences_estimates(fit_gene_source_narrow, data_for_prediction_gene_source, genes_to_show = genes_to_show)
+plot_gene_phenotype_differences_estimates(fit_gene_source_narrow, data_for_prediction_gene_source_BBSome)
+
+plot_pairwise_differences(fit_gene_source_narrow, data_for_prediction_gene_source_BBSome)
+
+```
+
+# Source, wide priors
+
+```{r}
+priors <- c(prior(normal(0,5), class = Intercept), prior(normal(0,5), class = sd))
+
+fit_gene_source_narrow <- brm(formula_gene_source, prior = priors, data = data_long, control = list(adapt_delta = 0.9),
+                     file = here(stored_fits_dir,"gene_source_narrow"))
+fit_gene_source_narrow
+#run_pp_checks(fit_gene_source_nocor, data_long)
+plot_gene_phenotype_differences_estimates(fit_gene_source_narrow, data_for_prediction_gene_source, genes_to_show = genes_to_show)
+plot_gene_phenotype_differences_estimates(fit_gene_source_narrow, data_for_prediction_gene_source_BBSome)
+
+plot_pairwise_differences(fit_gene_source_narrow, data_for_prediction_gene_source_BBSome)
+
+```
 
 # Source, no phenotype correlations
 
