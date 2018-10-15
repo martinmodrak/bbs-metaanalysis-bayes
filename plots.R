@@ -13,46 +13,54 @@ my_ppc_bars_grouped <- function(...) {
 run_pp_checks <- function(fit, data_long, 
                           types = c("overall","gene","phenotype","functional_group","functional_group_phenotype",
                                     "sex", "sex_phenotype","age","age_phenotype"), 
+                          prediction_filter = NULL,
                           out_func = print) {
   
-  predicted <- posterior_predict(fit, n_samples = 1000) 
+  predicted <- posterior_predict(fit, nsamples = 1000)
+  data <- data_long
   
+  if(!is.null(prediction_filter)) {
+    predicted <- predicted[,prediction_filter] 
+    data <- data_long[prediction_filter,]
+  }
+
+  observed <- data$phenotype_value
   
   if("overall" %in% types) {
-    my_ppc_bars(data_long$phenotype_value, predicted) %>% out_func
+    my_ppc_bars(data_filtered$phenotype_value, predicted) %>% out_func
   }
   if("gene" %in% types) {
-    my_ppc_bars_grouped(data_long$phenotype_value, predicted, group = data_long$gene) %>% out_func
+    my_ppc_bars_grouped(data_filtered$phenotype_value, predicted, group = data$gene) %>% out_func
   }
   if("phenotype" %in% types) {
-    my_ppc_bars_grouped(data_long$phenotype_value, predicted, group = data_long$phenotype) %>% out_func
+    my_ppc_bars_grouped(data_filtered$phenotype_value, predicted, group = data$phenotype) %>% out_func
   }
   
   if("functional_group" %in% types) {
-    my_ppc_bars_grouped(data_long$phenotype_value, predicted, group = data_long$functional_group) %>% out_func
+    my_ppc_bars_grouped(observed, predicted, group = data$functional_group) %>% out_func
   }
   
   if("functional_group_phenotype" %in% types) {
-    my_ppc_bars_grouped(data_long$phenotype_value, predicted, group = interaction(data_long$functional_group, data_long$phenotype)) %>% out_func
+    my_ppc_bars_grouped(observed, predicted, group = interaction(data$functional_group, data$phenotype)) %>% out_func
   }
   
-  sex_fct <- factor(if_else(is.na(data_long$Sex), "NA", as.character(data_long$Sex)))
+  sex_fct <- factor(if_else(is.na(data$Sex), "NA", as.character(data$Sex)))
   if("sex" %in% types) {
-    my_ppc_bars_grouped(data_long$phenotype_value, predicted, group = sex_fct) %>% out_func
+    my_ppc_bars_grouped(observed, predicted, group = sex_fct) %>% out_func
   }
   
   if("sex_phenotype" %in% types) {
-    my_ppc_bars_grouped(data_long$phenotype_value, predicted, group = interaction(sex_fct, data_long$phenotype)) %>% out_func
+    my_ppc_bars_grouped(observed, predicted, group = interaction(sex_fct, data$phenotype)) %>% out_func
   }
   
   
-  age_fct <- factor(if_else(is.na(data_long$age_group), "NA", as.character(data_long$age_group)))
+  age_fct <- factor(if_else(is.na(data$age_group), "NA", as.character(data$age_group)))
   if("age" %in% types) {
-    my_ppc_bars_grouped(data_long$phenotype_value, predicted, group = age_fct) %>% out_func
+    my_ppc_bars_grouped(observed, predicted, group = age_fct) %>% out_func
   }
   
   if("age_phenotype" %in% types) {
-    my_ppc_bars_grouped(data_long$phenotype_value, predicted, group = interaction(age_fct, data_long$phenotype)) %>% out_func
+    my_ppc_bars_grouped(observed, predicted, group = interaction(age_fct, data$phenotype)) %>% out_func
   }
   
 }
