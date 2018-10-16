@@ -1,0 +1,100 @@
+---
+title: "Bayesian metanalysis of BBS"
+output: html_notebook
+---
+
+```{r setup}
+library(rstan)
+library(brms)
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+library(skimr)
+library(readxl)
+library(here)
+library(tidyverse)
+library(tidybayes)
+library(bayesplot)
+library(cowplot)
+
+
+source(here("data_processing.R"))
+source(here("modelling_base.R"))
+source(here("plots.R"))
+
+
+stored_fits_dir <- "stored_fits"
+if(!dir.exists(here(stored_fits_dir))) {
+  dir.create(here(stored_fits_dir))
+}
+
+
+```
+
+
+```{r}
+data <- read_main_data()
+data %>% skim()
+```
+
+The groups we use
+```{r}
+data %>% select(gene, functional_group) %>% distinct() %>% group_by(functional_group) %>% summarise(genes = paste(gene, collapse = ","))
+```
+
+
+
+```{r}
+data %>% group_by(gene) %>% summarise(count = length(gene))
+```
+
+
+```{r}
+genes_to_show <- genes_to_show_from_data(data)
+
+data_long <- data_long_from_data(data)
+
+data_long %>% group_by(gene, phenotype) %>% summarise(count = length(phenotype_value), prop = mean(phenotype_value))
+```
+
+
+```{r}
+
+priors <- c(intercept_prior, sd_prior)
+
+#The file argument
+fit_gene_source <- brm(formula_gene_source, prior = priors, data = data_long, control = list(adapt_delta = 0.9),
+                     file = here(stored_fits_dir,"gene_source"))
+fit_gene_source
+#run_pp_checks(fit_gene_source, data_long)
+```
+
+```{r}
+data_for_prediction_gene_source <- tibble(gene = genes_to_show, source = "new_source") %>%
+    crossing(tibble(phenotype = phenotypes_to_show)) %>% mutate(functional_group = functional_group_for_gene(gene))
+
+data_for_prediction_gene_source_BBSome <- data_for_prediction_gene_source %>% filter(functional_group_for_gene(gene) == "BBSome", gene != "BBS18")
+```
+
+```{r, fig.width=10, fig.height=4}
+plot_gene_phenotype_differences_estimates(fit_gene_source, data_for_prediction_gene_source, genes_to_show = genes_to_show)
+
+```
+
+In all of the plots we are showing odds ratio of a given phenotype for gene on the x axis against the gene on the y axis.
+
+```{r, fig.width=8, fig.height=4}
+
+plot_pairwise_differences(fit_gene_source, data_for_prediction_gene_source_BBSome, plot_types = c("heatmap_min","heatmap_max"))
+```
+
+```{r, fig.width=10, fig.height=7}
+plot_pairwise_differences(fit_gene_source, data_for_prediction_gene_source_BBSome, plot_types = "linerange_all")
+
+```
+
+# Saving figures for publication
+
+```{r}
+
+```
+
