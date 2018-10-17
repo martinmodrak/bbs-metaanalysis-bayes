@@ -248,7 +248,7 @@ plot_pairwise_differences <- function(fit, data_for_prediction,
   
   scale_linerange <- scale_x_log10(labels = simple_num_format)
   scale_linerange_color <- scale_color_gradientn(limits = c(0,1), colours = c("#303030","#303030","#0571b0","#ca0020","#ca0020"),
-                                                 values = c(0,0.5,0.8,0.95, 1), breaks = c(0,0.5,0.95))
+                                                 values = c(0,0.4,0.6,0.95, 1), breaks = c(0,0.5,0.95))
 
   if("linerange" %in% plot_types) {
     for(ph in unique(data_for_prediction$phenotype)) {
