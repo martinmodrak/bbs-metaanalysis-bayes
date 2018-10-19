@@ -39,4 +39,5 @@ rsconnect/
 
 /private_data/
 /stored_fits/
+/tmp_pics/
 .Rproj.user

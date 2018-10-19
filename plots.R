@@ -105,6 +105,9 @@ simple_num_format <- function(x) {format(x, digits = 1, scientific = FALSE, drop
 
 
 plot_gene_phenotype_differences_estimates <- function(fit, data_for_prediction, genes_to_show = unique(data_for_prediction$gene)) {
+  if(is.null(data_for_prediction$group)) {
+    data_for_prediction$group <- data_for_prediction$gene
+  }
   samples_tidy <- get_tidy_samples(fit, data_for_prediction)
   
   per_phenotype_and_sample_average <- samples_tidy %>%
@@ -116,7 +119,7 @@ plot_gene_phenotype_differences_estimates <- function(fit, data_for_prediction, 
     inner_join(per_phenotype_and_sample_average, by = c("phenotype" = "phenotype", "sample" = "sample")) %>%
     #mutate(relative = value - avg) %>%
     mutate(relative = odds / avg_odds) %>%
-    group_by(phenotype, gene, functional_group) %>%
+    group_by(phenotype, group, functional_group) %>%
     summarise(Estimate = median(relative), 
               lower = quantile(relative, posterior_interval_bounds[1]),
               upper = quantile(relative, posterior_interval_bounds[2]),
@@ -124,13 +127,14 @@ plot_gene_phenotype_differences_estimates <- function(fit, data_for_prediction, 
               upper50 = quantile(relative, 0.75)
     )
   
-  data_to_plot %>% ggplot(aes(x = gene, y = Estimate, ymin = lower, ymax = upper, color = functional_group)) +
+  data_to_plot %>% ggplot(aes(x = group, y = Estimate, ymin = lower, ymax = upper, color = functional_group)) +
     geom_hline(yintercept = 1, color = "darkred")+ 
     geom_linerange(aes(ymin = lower50, ymax = upper50), size = 2) +
     geom_linerange() + 
     facet_wrap(~phenotype, scales = "free_y", ncol = 4)  + 
     scale_y_log10("Odds ratio", labels = simple_num_format) +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5))
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5)) +
+    guides(color = FALSE)
 }
 
 plot_pairwise_differences <- function(fit, data_for_prediction, 

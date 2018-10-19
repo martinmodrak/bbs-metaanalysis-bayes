@@ -76,7 +76,8 @@ data_for_prediction_gene_source_BBSome <- data_for_prediction_gene_source %>% fi
 ```
 
 ```{r, fig.width=10, fig.height=4}
-plot_gene_phenotype_differences_estimates(fit_gene_source, data_for_prediction_gene_source, genes_to_show = genes_to_show)
+plot_gene_phenotype_differences_estimates(fit_gene_source, data_for_prediction_gene_source %>% mutate(group = functional_group), genes_to_show = genes_to_show)
+plot_gene_phenotype_differences_estimates(fit_gene_source, data_for_prediction_gene_source_BBSome, genes_to_show = genes_to_show)
 
 ```
 
@@ -95,6 +96,28 @@ plot_pairwise_differences(fit_gene_source, data_for_prediction_gene_source_BBSom
 # Saving figures for publication
 
 ```{r}
+std_width = 8
+std_height = 4
+img_path = here("tmp_pics")
+if(!dir.exists(img_path)) {
+  dir.create(img_path)
+}
+type = ".eps"
 
+plot_gene_phenotype_differences_estimates(fit_gene_source, data_for_prediction_gene_source %>% mutate(group = functional_group), genes_to_show = genes_to_show) %>% ggsave(paste0("functional_groups", type), plot = ., path = img_path,height = std_height, width = 5)
+
+plot_gene_phenotype_differences_estimates(fit_gene_source, data_for_prediction_gene_source_BBSome, genes_to_show = genes_to_show) %>% ggsave(paste0("bbsome_overall", type), plot = ., path = img_path,height = std_height, width = std_width)
+
+plot_pairwise_differences(fit_gene_source, data_for_prediction_gene_source_BBSome, plot_types = c("heatmap_min", "heatmap_max"), out_func = function(name, plot) {
+  ggsave(paste0(name, type), plot = plot, path = img_path,height = std_height, width = std_width)
+})
+
+plot_pairwise_differences(fit_gene_source, data_for_prediction_gene_source_BBSome, plot_types = "linerange_all", out_func = function(name, plot) {
+  ggsave(paste0(name, type), plot = plot, path = img_path,height = 7, width = 10)
+})
+```
+
+```{r}
+sessionInfo()
 ```
 
