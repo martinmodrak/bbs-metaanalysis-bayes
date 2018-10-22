@@ -104,8 +104,8 @@ get_tidy_samples <- function(fit, data_for_prediction) {
 simple_num_format <- function(x) {format(x, digits = 1, scientific = FALSE, drop0trailing = TRUE)}
 
 
-plot_gene_phenotype_differences_estimates <- function(fit, data_for_prediction, genes_to_show = unique(data_for_prediction$gene)) {
-  if(is.null(data_for_prediction$group)) {
+plot_gene_phenotype_differences_estimates <- function(fit, data_for_prediction, genes_to_show = unique(data_for_prediction$gene), group_title = "Gene") {
+  if(is.null(data_for_prediction[["group"]])) {
     data_for_prediction$group <- data_for_prediction$gene
   }
   samples_tidy <- get_tidy_samples(fit, data_for_prediction)
@@ -133,6 +133,7 @@ plot_gene_phenotype_differences_estimates <- function(fit, data_for_prediction, 
     geom_linerange() + 
     facet_wrap(~phenotype, scales = "free_y", ncol = 4)  + 
     scale_y_log10("Odds ratio", labels = simple_num_format) +
+    scale_x_discrete(group_title) +
     theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5)) +
     guides(color = FALSE)
 }
@@ -192,7 +193,8 @@ plot_pairwise_differences <- function(fit, data_for_prediction,
       result_category = factor(result_category, levels = c("none","50_excl", "95_excl"))
     )
   
-  theme_heatmap <- theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5), legend.text = NULL)
+  theme_heatmap <- theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5),
+                         axis.title = element_blank())
 
   if("heatmap_p" %in% plot_types) {
     lims <- c(-1, 1) 
@@ -227,7 +229,7 @@ plot_pairwise_differences <- function(fit, data_for_prediction,
     p <- data_for_diff %>% 
       ggplot(aes(x = gene.x, y = gene.y, fill = min_probable_OR)) +
         geom_tile(width = 1, height = 1) +
-        scale_fill_gradient2(low = "#ca0020", high = "#0571b0", mid = "#f7f7f7", 
+        scale_fill_gradient2("     ", low = "#ca0020", high = "#0571b0", mid = "#f7f7f7", 
                              trans = "log10", breaks = c(0.5,1,2), limits = c(0.5,2)) +
         theme_heatmap +
         facet_wrap(~phenotype, ncol = 4) +
@@ -242,17 +244,18 @@ plot_pairwise_differences <- function(fit, data_for_prediction,
     p <- data_for_diff %>%  
       ggplot(aes(x = gene.x, y = gene.y, fill = max_probable_OR)) +
       geom_tile(width = 1, height = 1) +
-      scale_fill_distiller(palette = "Spectral", trans = "log10") +
+      scale_fill_distiller("     ", palette = "Spectral", trans = "log10") +
       theme_heatmap +
       facet_wrap(~phenotype, ncol = 4)+
-      ggtitle(paste0("Odds ratio, 95% maximal", title_add))
+      ggtitle(paste0("Odds ratio, 95% extreme", title_add))
     out_func(paste0("heatmap_max", title_add), p)
   }
   
   
   scale_linerange <- scale_x_log10(labels = simple_num_format)
-  scale_linerange_color <- scale_color_gradientn(limits = c(0,1), colours = c("#303030","#303030","#0571b0","#ca0020","#ca0020"),
-                                                 values = c(0,0.4,0.6,0.95, 1), breaks = c(0,0.5,0.95))
+  scale_linerange_color <- scale_color_gradientn("CI excluding 1" , limits = c(0,1), colours = c("#303030","#303030","#0571b0","#ca0020","#ca0020"),
+                                                 values = c(0,0.4,0.6,0.95, 1), breaks = c(0,0.5,0.95),
+                                                 labels = c("0%","50%","95%"))
 
   if("linerange" %in% plot_types) {
     for(ph in unique(data_for_prediction$phenotype)) {
@@ -266,12 +269,16 @@ plot_pairwise_differences <- function(fit, data_for_prediction,
         scale_linerange +
         scale_linerange_color +
         facet_grid( ~ gene.y)  +
-        ggtitle(paste0("95% and 50% credible intervals for pairwise differences",ph , title_add))
+        ggtitle(paste0("95% and 50% credible intervals for pairwise odds ratios",ph , title_add))
       out_func(paste0("linerange_", ph, title_add), p)
     }
   }
 
-  theme_linerange_all <- theme(axis.text=element_text(size=8), strip.text = element_text(size = 9))
+  theme_linerange_all <- theme(axis.text=element_text(size=8), strip.text = element_text(size = 9),
+                               axis.title = element_blank(), 
+                               legend.title = element_text(size = 11,angle = 270, vjust = 0.2),
+                               legend.text = element_text(size = 8))
+  
   if("linerange_all" %in% plot_types) {
       p <- data_for_diff %>% 
         ggplot(aes(color = CI_excl_one)) + 
@@ -284,7 +291,7 @@ plot_pairwise_differences <- function(fit, data_for_prediction,
         scale_linerange_color +
         facet_grid(phenotype ~ gene.x)  +
         theme_linerange_all +
-        ggtitle(paste0("95% and 50% credible intervals for pairwise differences", title_add))
+        ggtitle(paste0("95% and 50% credible intervals for pairwise odds ratios", title_add))
       out_func(paste0("linerange_all", title_add), p)
   }
   

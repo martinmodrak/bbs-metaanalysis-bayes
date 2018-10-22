@@ -75,18 +75,45 @@ data_for_prediction_gene_source <- tibble(gene = genes_to_show, source = "new_so
 data_for_prediction_gene_source_BBSome <- data_for_prediction_gene_source %>% filter(functional_group_for_gene(gene) == "BBSome", gene != "BBS18")
 ```
 
-```{r, fig.width=10, fig.height=4}
-plot_gene_phenotype_differences_estimates(fit_gene_source, data_for_prediction_gene_source %>% mutate(group = functional_group), genes_to_show = genes_to_show)
-plot_gene_phenotype_differences_estimates(fit_gene_source, data_for_prediction_gene_source_BBSome, genes_to_show = genes_to_show)
+# Summaries of mutation effects
 
+## Summary for functional groups
+
+Posterior 95% (thin) and 50% (thick) credible intervals for ratio of odds for a phenotype given a random mutation within a functional group to odds for the phenotype given a random mutation across all groups shown. All mutations are assumed to be equally likely - the odds are not weighed by the frequency of the mutations in the dataset. Odds ratios are shown on the log scale and each phenotype has its own scale.
+
+```{r, fig.width=8, fig.height=4}
+differences_func_group_plot <- plot_gene_phenotype_differences_estimates(fit_gene_source, data_for_prediction_gene_source %>% mutate(group = functional_group), genes_to_show = genes_to_show, group_title = "Functional group")
+differences_func_group_plot
 ```
 
-In all of the plots we are showing odds ratio of a given phenotype for gene on the x axis against the gene on the y axis.
+## Summary for BBSome genes
+
+Posterior 95% (thin) and 50% (thick) credible intervals for ratio of odds for a phenotype given a mutation in a gene to odds for the phenotype given a random mutation across all genes shown. All mutations are assumed to be equally likely - the odds are not weighed by the frequency of the mutations in the dataset. Odds ratios are shown on the log scale and each phenotype has its own scale.
+
+```{r, fig.width=8, fig.height=4}
+differences_bbsome_plot <- plot_gene_phenotype_differences_estimates(fit_gene_source, data_for_prediction_gene_source_BBSome, genes_to_show = genes_to_show)
+differences_bbsome_plot
+```
+
+# Pairwise comparisons of mutations in BBSome genes
+
+The most conservative (closest to one) pairwise odds ratios within 95% posterior credible intervals.
+The reported odds ratio are for gene on the horizontal axis against the gene on the vertical axis.
+
+```{r, fig.width=8, fig.height=4}
+plot_pairwise_differences(fit_gene_source, data_for_prediction_gene_source_BBSome,  "heatmap_min")
+```
+
+The most extreme (furthest from one) pairwise odds ratios within 95% posterior credible intervals.
+The direction of the effect is not reported as effects in both directions might be similarly plausible - the  odds ratio are transformed to be larger than one in all cases.
+
 
 ```{r, fig.width=8, fig.height=4}
 
-plot_pairwise_differences(fit_gene_source, data_for_prediction_gene_source_BBSome, plot_types = c("heatmap_min","heatmap_max"))
+plot_pairwise_differences(fit_gene_source, data_for_prediction_gene_source_BBSome, plot_types = "heatmap_max")
 ```
+
+Posterior 95% (thin) and 50% (thick) credible intervals for odds ratio for a phenotype given mutation in the gene on horizontal axis against the gene on the vertical axis. Color indicates the widest central posterior credible interval that does not include one.
 
 ```{r, fig.width=10, fig.height=7}
 plot_pairwise_differences(fit_gene_source, data_for_prediction_gene_source_BBSome, plot_types = "linerange_all")
@@ -102,19 +129,21 @@ img_path = here("tmp_pics")
 if(!dir.exists(img_path)) {
   dir.create(img_path)
 }
-type = ".eps"
+types = c(".eps",".png")
 
-plot_gene_phenotype_differences_estimates(fit_gene_source, data_for_prediction_gene_source %>% mutate(group = functional_group), genes_to_show = genes_to_show) %>% ggsave(paste0("functional_groups", type), plot = ., path = img_path,height = std_height, width = 5)
-
-plot_gene_phenotype_differences_estimates(fit_gene_source, data_for_prediction_gene_source_BBSome, genes_to_show = genes_to_show) %>% ggsave(paste0("bbsome_overall", type), plot = ., path = img_path,height = std_height, width = std_width)
-
-plot_pairwise_differences(fit_gene_source, data_for_prediction_gene_source_BBSome, plot_types = c("heatmap_min", "heatmap_max"), out_func = function(name, plot) {
-  ggsave(paste0(name, type), plot = plot, path = img_path,height = std_height, width = std_width)
-})
-
-plot_pairwise_differences(fit_gene_source, data_for_prediction_gene_source_BBSome, plot_types = "linerange_all", out_func = function(name, plot) {
-  ggsave(paste0(name, type), plot = plot, path = img_path,height = 7, width = 10)
-})
+for(type in types) {
+  differences_func_group_plot %>% ggsave(paste0("functional_groups", type), plot = ., path = img_path,height = std_height, width = 5)
+  
+  differences_bbsome_plot %>% ggsave(paste0("bbsome_overall", type), plot = ., path = img_path,height = std_height, width = std_width)
+  
+  plot_pairwise_differences(fit_gene_source, data_for_prediction_gene_source_BBSome, plot_types = c("heatmap_min", "heatmap_max"), out_func = function(name, plot) {
+    ggsave(paste0(name, type), plot = plot, path = img_path,height = std_height, width = std_width)
+  })
+  
+  plot_pairwise_differences(fit_gene_source, data_for_prediction_gene_source_BBSome, plot_types = "linerange_all", out_func = function(name, plot) {
+    ggsave(paste0(name, type), plot = plot, path = img_path,height = 7, width = 10)
+  })
+}
 ```
 
 ```{r}

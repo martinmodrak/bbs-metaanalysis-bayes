@@ -6,7 +6,8 @@ phenotypes_to_use <- c("RD","OBE","PD","CI","REN","LIV","REPROD","HEART")
 phenotypes_to_show <- phenotypes_to_use
 
 genes_to_show_from_data <- function(data) {
-  data %>% select(gene,functional_group) %>% distinct() %>% filter(functional_group != c("Others"), !(gene %in% c("BBS18"))) %>% get("gene", .)
+  data %>% select(gene,functional_group) %>% distinct() %>% 
+    filter(functional_group != c("Others")) %>% get("gene", .)
 } 
 
 
