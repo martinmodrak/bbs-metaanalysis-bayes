@@ -113,7 +113,7 @@ The direction of the effect is not reported as effects in both directions might 
 plot_pairwise_differences(fit_gene_source, data_for_prediction_gene_source_BBSome, plot_types = "heatmap_max")
 ```
 
-Posterior 95% (thin) and 50% (thick) credible intervals for odds ratio for a phenotype given mutation in the gene on horizontal axis against the gene on the vertical axis. Color indicates the widest central posterior credible interval that does not include one.
+Posterior 95% (thin) and 50% (thick) credible intervals for odds ratio for a phenotype given mutation in the gene on horizontal axis against the gene on the vertical axis. Color indicates the widest central posterior credible interval that does not include one. Odds ratio are shown on the log scale.
 
 ```{r, fig.width=10, fig.height=7}
 plot_pairwise_differences(fit_gene_source, data_for_prediction_gene_source_BBSome, plot_types = "linerange_all")
@@ -145,6 +145,32 @@ for(type in types) {
   })
 }
 ```
+
+Checking the LIV phenotype
+
+```{r}
+data_long %>% filter(phenotype == "LIV") %>% group_by(functional_group) %>%
+ summarise(avg_phenotype = mean(phenotype_value))
+```
+
+
+```{r}
+pos = position_jitterdodge(dodge.width = 0.3, jitter.width = 0, jitter.height = 0.02)
+
+plot_liv_source <-  data_long %>% filter(phenotype == "LIV", functional_group != "Others") %>% 
+  group_by(functional_group, source) %>%
+  summarise(avg_phenotype = mean(phenotype_value), num_cases = length(phenotype_value)) %>% 
+  droplevels() %>%
+  ggplot(aes(x = functional_group, y = avg_phenotype, group = source, color = source)) + 
+  geom_line(alpha = 0.5, position = pos) + geom_point(aes(size = num_cases), position = pos, alpha = 0.5) + guides(color = FALSE)
+
+plot_liv_source
+
+for(type in ".png") {
+  ggsave(paste0("liv_by_source", type), plot = plot_liv_source, path = img_path, height = std_height, width = std_width)
+}
+```
+
 
 ```{r}
 sessionInfo()
