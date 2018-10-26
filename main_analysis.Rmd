@@ -79,20 +79,21 @@ data_for_prediction_gene_source_BBSome <- data_for_prediction_gene_source %>% fi
 
 ## Summary for functional groups
 
-Posterior 95% (thin) and 50% (thick) credible intervals for ratio of odds for a phenotype given a random mutation within a functional group to odds for the phenotype given a random mutation across all groups shown. All mutations are assumed to be equally likely - the odds are not weighed by the frequency of the mutations in the dataset. Odds ratios are shown on the log scale and each phenotype has its own scale.
+Posterior 95% (thin) and 50% (thick) credible intervals for ratio of odds for a phenotype given a random mutation within a functional group to odds for the phenotype given a random mutation across all groups shown. All mutations are assumed to be equally likely - the odds are not weighed by the frequency of the mutations in the dataset. Odds ratios are shown on the log scale and each phenotype has its own scale. Gray dots show the same odds ratio calculated for individual studies included in the metanalysis. Dots below the dashed lines correspond to studies where the empirical odds ratio is 0 or infinity. Dot size represents the number of relevant cases in the study.
+
 
 ```{r, fig.width=8, fig.height=4}
-differences_func_group_plot <- plot_gene_phenotype_differences_estimates(fit_gene_source, data_for_prediction_gene_source %>% mutate(group = functional_group), genes_to_show = genes_to_show, group_title = "Functional group")
+differences_func_group_plot <- plot_gene_phenotype_differences_estimates(fit_gene_source, data_for_prediction_gene_source %>% mutate(group = functional_group), genes_to_show = genes_to_show, group_title = "Functional group", data_original = data_long %>% mutate(group = functional_group))
 differences_func_group_plot
 ```
 
 ## Summary for BBSome genes
 
-Posterior 95% (thin) and 50% (thick) credible intervals for ratio of odds for a phenotype given a mutation in a gene to odds for the phenotype given a random mutation across all genes shown. All mutations are assumed to be equally likely - the odds are not weighed by the frequency of the mutations in the dataset. Odds ratios are shown on the log scale and each phenotype has its own scale.
+Posterior 95% (thin) and 50% (thick) credible intervals for ratio of odds for a phenotype given a mutation in a gene to odds for the phenotype given a random mutation across all genes shown. All mutations are assumed to be equally likely - the odds are not weighed by the frequency of the mutations in the dataset. Odds ratios are shown on the log scale and each phenotype has its own scale. Gray dots show the same odds ratio calculated for individual studies included in the metanalysis. Dots below the dashed lines correspond to studies where the empirical odds ratio is 0 or infinity. Dot size represents the number of relevant cases in the study.
 
 ```{r, fig.width=8, fig.height=4}
-differences_bbsome_plot <- plot_gene_phenotype_differences_estimates(fit_gene_source, data_for_prediction_gene_source_BBSome, genes_to_show = genes_to_show)
-differences_bbsome_plot
+differences_bbsome_plot <- plot_gene_phenotype_differences_estimates(fit_gene_source, data_for_prediction_gene_source_BBSome, genes_to_show = genes_to_show, data_original = data_long)
+differences_bbsome_plot #TODO lines to separate extreme studies (prob better than color separations)
 ```
 
 # Pairwise comparisons of mutations in BBSome genes

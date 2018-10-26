@@ -104,10 +104,12 @@ get_tidy_samples <- function(fit, data_for_prediction) {
 simple_num_format <- function(x) {format(x, digits = 1, scientific = FALSE, drop0trailing = TRUE)}
 
 
-plot_gene_phenotype_differences_estimates <- function(fit, data_for_prediction, genes_to_show = unique(data_for_prediction$gene), group_title = "Gene") {
+plot_gene_phenotype_differences_estimates <- function(fit, data_for_prediction, genes_to_show = unique(data_for_prediction$gene), group_title = "Gene", data_original = NULL) {
   if(is.null(data_for_prediction[["group"]])) {
     data_for_prediction$group <- data_for_prediction$gene
   }
+  
+  
   samples_tidy <- get_tidy_samples(fit, data_for_prediction)
   
   per_phenotype_and_sample_average <- samples_tidy %>%
@@ -126,16 +128,100 @@ plot_gene_phenotype_differences_estimates <- function(fit, data_for_prediction, 
               lower50 = quantile(relative, 0.25),
               upper50 = quantile(relative, 0.75)
     )
+
+  if(is.null(data_original)) {
+    original_geom = NULL 
+    limits_geom = NULL
+  } else {
+    if(is.null(data_original[["group"]])) {
+      data_original$group <- data_original$gene
+    }
+    
+    data_original_matched <- data_original %>%
+      filter(phenotype %in% unique(data_for_prediction$phenotype),
+             gene %in% genes_to_show,
+             gene %in% unique(data_for_prediction$gene))
+    
+    per_phenotype_and_source_average_original <- data_original_matched %>%
+      group_by(phenotype, source, gene) %>% #Two step averaging to reflect that all genes have the same weight in fitted data
+      summarise(avg_per_gene = mean(phenotype_value)) %>%
+      group_by(phenotype, source) %>%
+      summarise(avg = mean(avg_per_gene)) %>%
+      mutate(avg_odds = avg / (1-avg))
+    
+    data_to_plot_original <- data_original_matched %>%
+      group_by(phenotype, group, source) %>%
+      summarise(avg = mean(phenotype_value), num_cases = length(phenotype_value)) %>%
+      mutate(odds = avg / (1-avg)) %>%
+      inner_join(per_phenotype_and_source_average_original, by = c("phenotype" = "phenotype", "source" = "source")) %>%
+      mutate(odds_ratio = case_when(
+        avg.y == 0 ~ 1,
+        avg.y == 1 ~ 1,
+        avg.x == 0 ~ NA_real_,
+        avg.x == 1 ~ NA_real_,
+        TRUE ~ odds / avg_odds) )
+    
+    phenotype_limits_points <- data_to_plot_original %>% 
+      filter(!is.na(odds_ratio), odds_ratio > 0) %>%
+      group_by(phenotype) %>%
+      summarise(min_or_points = min(odds_ratio), max_or_points = max(odds_ratio))
+
+    phenotype_limits_intervals <- data_to_plot %>% 
+      group_by(phenotype) %>%
+      summarise(min_or_intervals = min(lower), max_or_intervals = max(upper))
+    
+    phenotype_limits <- phenotype_limits_points %>%
+      inner_join(phenotype_limits_intervals, by = c("phenotype" = "phenotype")) %>%
+      mutate(min_or = pmin(min_or_intervals, min_or_points), 
+             max_or = pmax(max_or_intervals, max_or_points),
+             limits_ratio = max_or / min_or
+             )
+    
+    data_to_plot_original_imputed <- data_to_plot_original %>%
+      inner_join(phenotype_limits, by = c("phenotype"= "phenotype")) %>%
+      mutate(type = case_when(
+        !is.na(odds_ratio) ~ "normal",
+        avg.x == 0 ~ "low",
+        avg.x == 1 ~ "up",
+        TRUE ~ NA_character_
+      ),
+      odds_ratio = case_when(
+        !is.na(odds_ratio) ~ odds_ratio,
+        avg.x == 0 ~ min_or / (limits_ratio ^ 0.1),
+        avg.x == 1 ~ max_or * (limits_ratio ^ 0.1),
+        TRUE ~ NA_real_)
+      )
+    
+    original_geom = geom_point(data = data_to_plot_original_imputed, 
+                               aes(size = num_cases, x = group, y = odds_ratio), 
+                               inherit.aes = FALSE, color = "darkgray", alpha = 0.5,
+                               position = position_jitter(width = 0.2, height = 0))
+    
+    limits_geom = geom_hline(
+      data = phenotype_limits %>%
+        mutate(min_or_bound = min_or / (limits_ratio ^ 0.05),
+               max_or_bound = max_or * (limits_ratio ^ 0.05)) %>%
+        gather("type","value", min_or_bound, max_or_bound),
+      aes(yintercept = value), inherit.aes = FALSE, 
+      color = "blue",
+      linetype = "dashed"
+      )
+  }
   
+    
   data_to_plot %>% ggplot(aes(x = group, y = Estimate, ymin = lower, ymax = upper, color = functional_group)) +
     geom_hline(yintercept = 1, color = "darkred")+ 
+    limits_geom +
+    original_geom +
     geom_linerange(aes(ymin = lower50, ymax = upper50), size = 2) +
-    geom_linerange() + 
+    geom_linerange() +
     facet_wrap(~phenotype, scales = "free_y", ncol = 4)  + 
     scale_y_log10("Odds ratio", labels = simple_num_format) +
     scale_x_discrete(group_title) +
+    scale_alpha_continuous(range = c(0.1,0.6)) +
+    scale_size_continuous(range = c(0.5,3)) +
     theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5)) +
-    guides(color = FALSE)
+    guides(color = FALSE, size = FALSE, alpha = FALSE)
 }
 
 plot_pairwise_differences <- function(fit, data_for_prediction, 
