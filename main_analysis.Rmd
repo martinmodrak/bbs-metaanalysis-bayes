@@ -36,6 +36,8 @@ if(!dir.exists(here(stored_fits_dir))) {
 
 *The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes *
 
+This document describes the Bayesian analysis reported in the main manuscript. A separate supplementary file (TODO add ID of the file) describes the multiverse analysis where we test how the results change with different modelling assumptions. All references to "multiverse analysis" in this text point to this document.
+
 # The data
 
 First let us examine some of the properties of the data se we are working with - a brief summary follows.
@@ -93,9 +95,9 @@ Here, every point represents the proportion of patients with a given mutation th
 # Handling missingness
 
 The most problematic missing data problem is the missingness in phenotype data. There are two distinct sources of missingness: a) a study missing the phenotype value for only some patients or b) a study not reporting the status of the phenotype for any patient. 
-Our analysis assumes the phenotype data to be missing at random, i.e. that the decision to not report a given phenotype in a study and missingness for individual patients is independent of the prevalence of the phenotype in the study population. This is probably not true for missingness at the study level, as investigators are plausibly more likely to report more prevalent phenotypes and more likely to ignore phenotype that was not observed in any patient. Similarly, if data for a specific patient omits a given phenotype, it is more likely the phenotype was not present. 
+Our analysis assumes the phenotype data to be missing at random, i.e. that the decision to not report a given phenotype in a study and missingness for individual patients is independent of the prevalence of the phenotype in the study population. This is probably not true for missingness at the study level, as investigators are plausibly more likely to report more prevalent phenotypes and more likely to ignore phenotype that was not observed in any patient. Similarly, if data for a specific patient omits a given phenotype (the state of the phenotype is reported as missing data in the original study), it is more likely the phenotype was not present. 
 
-However, in our analysis we were unable to find a good way to account for this phenomenon. This is a limitation of our approach and should be taken into account when interpreting the results. We however focus on comparison of phenotype incidence across different mutations and do not compare phenotypes against each other, so this is only an issue as far as the rate of missingness in phenotype values is correlated with the incidence of individual mutations present in a study (e.g. if studies with high phenotype missingness would also have overabundance of mutations in BBS03). Looking at the data at hand, a strong correlation of this type is implausible, but cannot be completely ruled out:
+However, in our analysis we were unable to find a good way to account for this phenomenon. But since we focus on comparison of phenotype incidence across different mutations and do not compare phenotypes against each other, this should only be a significant issue if the rate of missingness in phenotype values is correlated with the incidence of individual mutations present in a study (e.g. if studies with high obesity missingness would also tend to have overabundance of mutations in BBS03). Let's check whether this is the case:
 
 ```{r}
 phenotype_stats <- data_long %>% 
@@ -111,13 +113,13 @@ data_long %>%
   mutate(mutation_incidence = n_mutations / n_patients) %>%
   filter(functional_group %in% c("BBSome","BBS03"), gene != "BBS18" ) %>%
   ggplot(aes(x = avg_n_pheno, y = mutation_incidence, size = n_patients, weight = n_patients)) + 
-  geom_smooth(method = "glm", family = "beta") +
+  geom_smooth(method = "glm", method.args = list(family = "binomial")) +
   geom_jitter(alpha = 0.3) +
   guides(size = guide_legend(override.aes = list(alpha = 1))) +
-  facet_wrap(~gene, scales = "free" )
+  facet_wrap(~gene, scales = "free", nrow = 2 )
 ```
 
-In the figure above, each dot is a single study and show the average number of phenotypes reported per patient vs. the incidence of mutations in individual genes. Point size correspond to the number of patients in a given study.
+In the figure above, each dot is a single study and show the average number of phenotypes reported per patient vs. the incidence of mutations in individual genes. Point size correspond to the number of patients in a given study. Looking at the figure, a strong association of missingness to specific mutations seems implausible, but we can't completely rule out it biases our results. This is a limitation of our approach and should be taken into account when interpreting our conclusions.
 
 There is large missingness in age and sex data as well. While our main analysis ignores age and sex, the attached multiverse analysis shows that after accounting for between-study differences, age and sex difference are already mostly accounted for. We have also tried to impute age and sex data and show that models including imputed age and/or sex provide almost identical results.
 
