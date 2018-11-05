@@ -1,9 +1,12 @@
 ---
-title: "Bayesian metanalysis of BBS"
-output: html_notebook
+title: "Bayesian metaanalysis of BBS phenotypes"
+output: html_document
+author: Martin Modrák
+date: '`r format(Sys.time(), "%d %B, %Y")`'
 ---
 
-```{r setup}
+```{r setup, echo=FALSE, message = FALSE}
+knitr::opts_chunk$set(echo=FALSE)
 library(rstan)
 library(brms)
 options(mc.cores = parallel::detectCores())
@@ -15,6 +18,7 @@ library(tidyverse)
 library(tidybayes)
 library(bayesplot)
 library(cowplot)
+library(knitr)
 
 
 source(here("data_processing.R"))
@@ -30,32 +34,137 @@ if(!dir.exists(here(stored_fits_dir))) {
 
 ```
 
+*The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes *
+
+# The data
+
+First let us examine some of the properties of the data se we are working with - a brief summary follows.
 
 ```{r}
 data <- read_main_data()
-data %>% skim()
+data %>%  select(-Age_corr, -ID, -age_numbers, -age_numbers_groups_guessed, -age_std_for_model) %>% skim()
 ```
 
-The groups we use
-```{r}
-data %>% select(gene, functional_group) %>% distinct() %>% group_by(functional_group) %>% summarise(genes = paste(gene, collapse = ","))
-```
+Note in particular, that both age and sex are missing in almost half of the records. Also, the data about individual phenotypes (all the numeric columns) is largely incomplete. Some minor clearing is required to use age, as it is stored as character (a combination of age ranges and ages). For some phenotypes we get values that are not 0 or 1 - those correspond to patients that were monitored in multiple studies, but the phenotype data was inconsistent. In our analysis we treat those patients as exhibiting the phenotype.
 
-
+For some analyses, we group the genes together according to *functional groups*, those are defined as folows:
 
 ```{r}
-data %>% group_by(gene) %>% summarise(count = length(gene))
+data %>% select(gene, functional_group) %>% distinct() %>% group_by(functional_group) %>% summarise(genes = paste(gene, collapse = ",")) %>% kable()
 ```
 
+And here are the counts of individual mutations as observed in the data:
+
+```{r}
+data %>% group_by(gene) %>% summarise(count = length(gene)) %>% kable()
+```
+
+While we include all of the genes in our computational model, we will mostly show only the most frequent mutations in the results here, those include BBS01 through BBS10 and BBS12.
 
 ```{r}
 genes_to_show <- genes_to_show_from_data(data)
-
 data_long <- data_long_from_data(data)
-
-data_long %>% group_by(gene, phenotype) %>% summarise(count = length(phenotype_value), prop = mean(phenotype_value))
 ```
 
+On the other hand, we only include eight phenotypes in the model as those are our primary interest and including all phenotypes increased the computational burden of fitting the models.
+
+```{r}
+phenotypes_to_use
+```
+
+
+The data shows considerable between-study (source) variability (showing only the BBSome genes for clarity):
+
+```{r}
+data_long %>% 
+  group_by(source, phenotype, gene) %>% 
+  filter(functional_group == "BBSome", gene != "BBS18") %>%
+  summarise(n_patients = length(phenotype_value), proportion = sum(phenotype_value) / n_patients) %>%
+  ggplot(aes(x = gene, y = proportion, size = n_patients)) +
+  geom_jitter(alpha = 0.3, height = 0, width = 0.3) +
+  facet_wrap(~phenotype) +
+  scale_y_continuous("Proportion of phenotype") +
+  scale_size_continuous(range = c(0.5,4)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5))
+```
+
+Here, every point represents the proportion of patients with a given mutation that manifested a given phenotype in one study. The point size represents the number of patients with the mutation in the study. We see that even studies with a relatively large number of patients do show very different proportions. We are therefore confident that allowing for between-study heterogeneity is important for analysing the data correctly. In the attached multiverse analysis, we also attempted to model the data as homogenous and found it to be a bad fit.
+
+# Handling missingness
+
+The most problematic missing data problem is the missingness in phenotype data. There are two distinct sources of missingness: a) a study missing the phenotype value for only some patients or b) a study not reporting the status of the phenotype for any patient. 
+Our analysis assumes the phenotype data to be missing at random, i.e. that the decision to not report a given phenotype in a study and missingness for individual patients is independent of the prevalence of the phenotype in the study population. This is probably not true for missingness at the study level, as investigators are plausibly more likely to report more prevalent phenotypes and more likely to ignore phenotype that was not observed in any patient. Similarly, if data for a specific patient omits a given phenotype, it is more likely the phenotype was not present. 
+
+However, in our analysis we were unable to find a good way to account for this phenomenon. This is a limitation of our approach and should be taken into account when interpreting the results. We however focus on comparison of phenotype incidence across different mutations and do not compare phenotypes against each other, so this is only an issue as far as the rate of missingness in phenotype values is correlated with the incidence of individual mutations present in a study (e.g. if studies with high phenotype missingness would also have overabundance of mutations in BBS03). Looking at the data at hand, a strong correlation of this type is implausible, but cannot be completely ruled out:
+
+```{r}
+phenotype_stats <- data_long %>% 
+  group_by(ID, source) %>%
+  summarise(n_pheno = length(phenotype)) %>%
+  group_by(source) %>%
+  summarise(avg_n_pheno = mean(n_pheno), n_patients = length(ID))
+
+data_long %>%
+  group_by(source, gene, functional_group) %>%
+  summarise(n_mutations = length(unique(ID))) %>%
+  inner_join(phenotype_stats, by = c("source" = "source")) %>%
+  mutate(mutation_incidence = n_mutations / n_patients) %>%
+  filter(functional_group %in% c("BBSome","BBS03"), gene != "BBS18" ) %>%
+  ggplot(aes(x = avg_n_pheno, y = mutation_incidence, size = n_patients, weight = n_patients)) + 
+  geom_smooth(method = "glm", family = "beta") +
+  geom_jitter(alpha = 0.3) +
+  guides(size = guide_legend(override.aes = list(alpha = 1))) +
+  facet_wrap(~gene, scales = "free" )
+```
+
+In the figure above, each dot is a single study and show the average number of phenotypes reported per patient vs. the incidence of mutations in individual genes. Point size correspond to the number of patients in a given study.
+
+There is large missingness in age and sex data as well. While our main analysis ignores age and sex, the attached multiverse analysis shows that after accounting for between-study differences, age and sex difference are already mostly accounted for. We have also tried to impute age and sex data and show that models including imputed age and/or sex provide almost identical results.
+
+# The model - an accessible explanation
+
+# The model - math
+
+The model is specified with the following brms formula, using the Bernoulli family with logit link function:
+
+```{r}
+formula_gene_source
+```
+
+this can be expressed in the usual mathematical notation as:
+
+$$
+\begin{align}
+Y_i &\sim Bernoulli(\mu_i) \\
+\mathrm{logit}(\mu_i) &= \alpha + \beta^1_{p_i} + \beta^2_{p_i,g_i} + \beta^3_{p_i,s_i}
+\end{align}
+$$
+
+Where $p_i \in \{1, ..., P \}$ is the index of the phenotype for $i$-th row, $g_i \in \{1,...,G\}$ is mutated gene for $i$-row and $s_i \in \{1,...,S\}$ is the index of the source study for $i$-th row. $\alpha$ is the intercept and $\beta^1, \beta^2$ and $\beta^3$ model the overall phenotype prevalence,  phenotype prevalance specific to a given mutation and between-study variability in phenotype prevalence respectively.
+
+The priors we use for the parameters are:
+
+$$
+\begin{align}
+\alpha &\sim N(0, 2) \\
+\beta^1 &\sim N(0, \sigma_1) \\
+\sigma_1 &\sim N(0, 2) \\
+
+\beta^2 &\sim \mathcal{N}_P(\boldsymbol{0}, \boldsymbol{\Sigma}) \\
+\boldsymbol{\Sigma} &= \boldsymbol{\sigma}_2  \bar{\boldsymbol{\Sigma}} \\
+\bar{\boldsymbol{\Sigma}} &\sim LKJ_P(1) \\
+\sigma_{2,p} &\sim N(0, 2) \\
+
+\beta^3_{p,s} &\sim  N(0, \sigma_{3,p})\\
+\sigma_{3,p} &\sim N(0, 2)
+\end{align}
+$$
+
+Note that the prior on $\beta^1$ is $P$-dimensional multivariete normal $\mathcal{N}_P$, explicitly modelling the correlation $\bar{\boldsymbol{\Sigma}}$ between the incidence of individual phenotypes, while the other priors are univariete normal.
+
+The attached multiverse analysis shows that the results are almost identical when the priors are different.
+
+# Main results
 
 ```{r}
 
