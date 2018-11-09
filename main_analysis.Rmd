@@ -68,7 +68,7 @@ genes_to_show <- genes_to_show_from_data(data)
 data_long <- data_long_from_data(data)
 ```
 
-On the other hand, we only include eight phenotypes in the model as those are our primary interest and including all phenotypes increased the computational burden of fitting the models.
+On the other hand, we only include eight phenotypes in the model as those are our primary interest and including all phenotypes notably increased the computational burden of fitting the models.
 
 ```{r}
 phenotypes_to_use
@@ -82,11 +82,12 @@ data_long %>%
   group_by(source, phenotype, gene) %>% 
   filter(functional_group == "BBSome", gene != "BBS18") %>%
   summarise(n_patients = length(phenotype_value), proportion = sum(phenotype_value) / n_patients) %>%
-  ggplot(aes(x = gene, y = proportion, size = n_patients)) +
+  ggplot(aes(x = gene, y = proportion, size = n_patients, color = gene)) +
   geom_jitter(alpha = 0.3, height = 0, width = 0.3) +
   facet_wrap(~phenotype) +
   scale_y_continuous("Proportion of phenotype") +
   scale_size_continuous(range = c(0.5,4)) +
+  guides(color = FALSE) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5))
 ```
 
@@ -97,7 +98,7 @@ Here, every point represents the proportion of patients with a given mutation th
 The most problematic missing data problem is the missingness in phenotype data. There are two distinct sources of missingness: a) a study missing the phenotype value for only some patients or b) a study not reporting the status of the phenotype for any patient. 
 Our analysis assumes the phenotype data to be missing at random, i.e. that the decision to not report a given phenotype in a study and missingness for individual patients is independent of the prevalence of the phenotype in the study population. This is probably not true for missingness at the study level, as investigators are plausibly more likely to report more prevalent phenotypes and more likely to ignore phenotype that was not observed in any patient. Similarly, if data for a specific patient omits a given phenotype (the state of the phenotype is reported as missing data in the original study), it is more likely the phenotype was not present. 
 
-However, in our analysis we were unable to find a good way to account for this phenomenon. But since we focus on comparison of phenotype incidence across different mutations and do not compare phenotypes against each other, this should only be a significant issue if the rate of missingness in phenotype values is correlated with the incidence of individual mutations present in a study (e.g. if studies with high obesity missingness would also tend to have overabundance of mutations in BBS03). Let's check whether this is the case:
+However, in our analysis we were unable to find a good way to account for this phenomenon. But since we focus on comparison of individual phenotype incidence across different mutations and do not compare phenotypes against each other, this should only be a significant issue if the rate of missingness in phenotype values is correlated with the incidence of individual mutations present in a study (e.g. if studies with high obesity missingness would also tend to have overabundance of mutations in BBS03). Let's check whether this is the case:
 
 ```{r}
 phenotype_stats <- data_long %>% 
@@ -119,21 +120,23 @@ data_long %>%
   facet_wrap(~gene, scales = "free", nrow = 2 )
 ```
 
-In the figure above, each dot is a single study and show the average number of phenotypes reported per patient vs. the incidence of mutations in individual genes. Point size correspond to the number of patients in a given study. Looking at the figure, a strong association of missingness to specific mutations seems implausible, but we can't completely rule out it biases our results. This is a limitation of our approach and should be taken into account when interpreting our conclusions.
+In the figure above, each dot is a single study and shows the average number of phenotypes reported per patient vs. the incidence of mutations in individual genes. Point size correspond to the number of patients in a given study. Looking at the figure, a strong association of missingness to specific mutations seems implausible, but we can't completely rule out that it biases our results. This is a limitation of our approach and should be taken into account when interpreting our conclusions.
 
 There is large missingness in age and sex data as well. While our main analysis ignores age and sex, the attached multiverse analysis shows that after accounting for between-study differences, age and sex difference are already mostly accounted for. We have also tried to impute age and sex data and show that models including imputed age and/or sex provide almost identical results.
 
 # The model - an accessible explanation
 
-# The model - math
+True proportion vs. observed proportion
 
-The model is specified with the following brms formula, using the Bernoulli family with logit link function:
+# The model - mathematical formulation
+
+For the model, we expand the data into long form, i.e. each row in the dataset corresponds to a combination of patient and reported phenotype (a patient with reported values for 3 phenotypes would correspond to 3 rows in the long form dataset). The model is specified with the following brms formula, using the Bernoulli family with logit link function:
 
 ```{r}
 formula_gene_source
 ```
 
-this can be expressed in the usual mathematical notation as:
+this can be expressed in mathematical notation as:
 
 $$
 \begin{align}
@@ -142,7 +145,7 @@ Y_i &\sim Bernoulli(\mu_i) \\
 \end{align}
 $$
 
-Where $p_i \in \{1, ..., P \}$ is the index of the phenotype for $i$-th row, $g_i \in \{1,...,G\}$ is mutated gene for $i$-row and $s_i \in \{1,...,S\}$ is the index of the source study for $i$-th row. $\alpha$ is the intercept and $\beta^1, \beta^2$ and $\beta^3$ model the overall phenotype prevalence,  phenotype prevalance specific to a given mutation and between-study variability in phenotype prevalence respectively.
+Where $p_i \in \{1, ..., P \}$ is the index of the phenotype for $i$-th row, $g_i \in \{1,...,G\}$ is mutated gene for $i$-th row and $s_i \in \{1,...,S\}$ is the index of the source study for $i$-th row. $\alpha$ is the intercept and $\beta^1, \beta^2$ and $\beta^3$ model the overall phenotype prevalence,  phenotype prevalance specific to a given mutation and between-study variability in phenotype prevalence respectively.
 
 The priors we use for the parameters are:
 
@@ -162,11 +165,13 @@ $$
 \end{align}
 $$
 
-Note that the prior on $\beta^1$ is $P$-dimensional multivariete normal $\mathcal{N}_P$, explicitly modelling the correlation $\bar{\boldsymbol{\Sigma}}$ between the incidence of individual phenotypes, while the other priors are univariete normal.
+Note that the prior on $\beta^1$ is $P$-dimensional multivariete normal $\mathcal{N}_P$, explicitly modelling the correlation $\bar{\boldsymbol{\Sigma}}$ between the incidence of individual phenotypes and per-phenotype variance $\sigma_{2,p}$, while the other priors are univariete normal.
 
 The attached multiverse analysis shows that the results are almost identical when the priors are different.
 
 # Main results
+
+First a summary of the model fit as posterior intervals for main model parameters: 
 
 ```{r}
 
@@ -186,11 +191,15 @@ data_for_prediction_gene_source <- tibble(gene = genes_to_show, source = "new_so
 data_for_prediction_gene_source_BBSome <- data_for_prediction_gene_source %>% filter(functional_group_for_gene(gene) == "BBSome", gene != "BBS18")
 ```
 
-# Summaries of mutation effects
+The fitted model parameters themselves are however hard to interpret, as they operate on log-odds scale. It is also hard to say how to handle the between-study variability of coefficients. And this variability  is substantial - note that the `sd` parameters under `~source` (corresponding to $\sigma_3$) admit ranges from $1.11$ to $5.09$, so the odds of a phenotype, given a mutation can plausibly differ between studies by $1.96 \times \pm 1.11 = \pm 2.16$ to $1.96 \times \pm 5.09 = \pm 9.97$ _on the log scale_ (95% of mass of a normal distribution is within $1.96 \times \sigma$ from the mean).
 
-## Summary for functional groups
+Instead we will focus on model predictions. In particular, the results we report can be interpreted as if a new study is drawn at random from the same population of studies as we used (i.e. matching all the inclusion criteria) and we directly observe true odds of all phenotypes for all mutations in this study. That is, the predictions do include between-study variability, our uncertainty about the population of studies, our uncertainty about overall prevalence of the individual phenotypes, our uncertainty about the strength of links between mutations and phenotypes and our uncertainty about correlations between the presence of individual phenotypes. The predictions do NOT include the sampling uncertainty of the hypothethical new study. For example when the hypothetical study has the true odds of a phenotype, given a mutation in BBS12, equal to $1:2$ ($0.5$), a study on 20 patients can easily observe odds of $3:17$ ($0.18$) or $11:9$ ($1.22$) simply due to chance, but we will treat the hypothetical study here as having odds of $0.5$ and ignore this additional noise in our results.
 
-Posterior 95% (thin) and 50% (thick) credible intervals for ratio of odds for a phenotype given a random mutation within a functional group to odds for the phenotype given a random mutation across all groups shown. All mutations are assumed to be equally likely - the odds are not weighed by the frequency of the mutations in the dataset. Odds ratios are shown on the log scale and each phenotype has its own scale. Gray dots show the same odds ratio calculated for individual studies included in the metanalysis. Dots below the dashed lines correspond to studies where the empirical odds ratio is 0 or infinity. Dot size represents the number of relevant cases in the study.
+Since those odds can vary wildly between studies, we will focus on various odds ratios (OR) within a single hypothethical study.
+
+# Summary for functional groups
+
+Posterior 95% (thin) and 50% (thick) credible intervals for ratio of odds for a phenotype given a random mutation within a functional group to odds for the phenotype given a random mutation across all groups shown. All mutations are assumed to be equally likely - the odds are not weighed by the frequency of the mutations in the dataset. Odds ratios are shown on the log scale and each phenotype has its own scale. Gray dots show the same odds ratio calculated for individual studies included in the metanalysis. Dots outside the dashed lines correspond to studies where the empirical odds ratio is 0 or infinity. Dot size represents the number of relevant cases in the study.
 
 
 ```{r, fig.width=8, fig.height=4}
@@ -204,13 +213,26 @@ Posterior 95% (thin) and 50% (thick) credible intervals for ratio of odds for a 
 
 ```{r, fig.width=8, fig.height=4}
 differences_bbsome_plot <- plot_gene_phenotype_differences_estimates(fit_gene_source, data_for_prediction_gene_source_BBSome, genes_to_show = genes_to_show, data_original = data_long)
-differences_bbsome_plot #TODO lines to separate extreme studies (prob better than color separations)
+differences_bbsome_plot 
 ```
 
 # Pairwise comparisons of mutations in BBSome genes
 
+The summary plots above are not well suited to infer pairwise comparisons, as the estimates for the individual genes / functional groups are not independent. In particular, non overlapping credible intervals in the summary plot implies that there is a consistent difference, but the converse is not true - a strong positive correlation might result in a consistent difference even for mostly overlapping marginal posterior intervals. And this is indeed the case - let's look at the correlations be
+
+```{r, fig.width=8, fig.height=4}
+plot_pairwise_differences(fit_gene_source, data_for_prediction_gene_source_BBSome,  "cor", 
+                          #FOr some reason, filtering phenotype in data_for_prediction breaks fitted.brms
+                          #Filtering in the out_func instead
+                          out_func = function(name, plot) { if(grepl("PD", name)) { print(plot)}})
+```
+
+
+
 The most conservative (closest to one) pairwise odds ratios within 95% posterior credible intervals.
 The reported odds ratio are for gene on the horizontal axis against the gene on the vertical axis.
+
+This shows pairs where we are fairly certain there is a systematic difference and the minimal magnitude of this difference.
 
 ```{r, fig.width=8, fig.height=4}
 plot_pairwise_differences(fit_gene_source, data_for_prediction_gene_source_BBSome,  "heatmap_min")
@@ -219,6 +241,7 @@ plot_pairwise_differences(fit_gene_source, data_for_prediction_gene_source_BBSom
 The most extreme (furthest from one) pairwise odds ratios within 95% posterior credible intervals.
 The direction of the effect is not reported as effects in both directions might be similarly plausible - the  odds ratio are transformed to be larger than one in all cases.
 
+This shows maximal differences consistent with our model and lets us constrain the differences between mutations for some phenotypes. We see that the data does not let us to put tight constraints on most differences - the tightest we get is OR of 3 - which would still be a very important difference in the clinic.
 
 ```{r, fig.width=8, fig.height=4}
 
@@ -226,6 +249,8 @@ plot_pairwise_differences(fit_gene_source, data_for_prediction_gene_source_BBSom
 ```
 
 Posterior 95% (thin) and 50% (thick) credible intervals for odds ratio for a phenotype given mutation in the gene on horizontal axis against the gene on the vertical axis. Color indicates the widest central posterior credible interval that does not include one. Odds ratio are shown on the log scale.
+
+This plot integrates the information shown in the plots above
 
 ```{r, fig.width=10, fig.height=7}
 plot_pairwise_differences(fit_gene_source, data_for_prediction_gene_source_BBSome, plot_types = "linerange_all")

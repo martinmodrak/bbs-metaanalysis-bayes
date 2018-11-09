@@ -181,8 +181,8 @@ plot_gene_phenotype_differences_estimates <- function(fit, data_for_prediction, 
       inner_join(phenotype_limits, by = c("phenotype"= "phenotype")) %>%
       mutate(type = case_when(
         !is.na(odds_ratio) ~ "normal",
-        avg.x == 0 ~ "low",
-        avg.x == 1 ~ "up",
+        avg.x == 0 ~ "extreme",
+        avg.x == 1 ~ "extreme",
         TRUE ~ NA_character_
       ),
       odds_ratio = case_when(
@@ -202,7 +202,7 @@ plot_gene_phenotype_differences_estimates <- function(fit, data_for_prediction, 
         mutate(min_or_bound = min_or / (limits_ratio ^ 0.05),
                max_or_bound = max_or * (limits_ratio ^ 0.05)) %>%
         gather("type","value", min_or_bound, max_or_bound),
-      aes(yintercept = value), inherit.aes = FALSE, 
+      aes(yintercept = value), 
       color = "blue",
       linetype = "dashed"
       )
@@ -232,7 +232,8 @@ plot_pairwise_differences <- function(fit, data_for_prediction,
   samples_diff <- samples_tidy %>% 
     select(-source) %>%
     inner_join(samples_tidy %>% select(-source), by = c("sample" = "sample","phenotype" = "phenotype")) %>%
-    mutate(odds_ratio = (value.x / (1 - value.x)) / (value.y / (1 - value.y)))
+    mutate(odds.x = (value.x / (1 - value.x)),
+           odds.y = (value.y / (1 - value.y)), odds_ratio =  odds.x / odds.y)
   
   
   if("cor" %in% plot_types) {
@@ -242,9 +243,10 @@ plot_pairwise_differences <- function(fit, data_for_prediction,
     
     for(ph in unique(data_for_prediction$phenotype)) {
       p <- data_for_cor %>% filter(phenotype == ph) %>%
-          ggplot(aes(x = value.x, y = value.y)) + 
-          geom_point(size = 0.1) + facet_grid(gene.x ~ gene.y, scales = "free")
-      out_func(p)
+          ggplot(aes(x = odds.x, y = odds.y)) + 
+          geom_point(size = 0.1) + facet_grid(gene.x ~ gene.y, scales = "free") +
+          ggtitle(paste0("Correlations for ", ph))
+      out_func(paste0("cor_",ph), p)
     }
    }
   
