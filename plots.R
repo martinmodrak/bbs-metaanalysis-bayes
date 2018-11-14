@@ -245,7 +245,9 @@ plot_pairwise_differences <- function(fit, data_for_prediction,
       p <- data_for_cor %>% filter(phenotype == ph) %>%
           ggplot(aes(x = odds.x, y = odds.y)) + 
           geom_point(size = 0.1) + facet_grid(gene.x ~ gene.y, scales = "free") +
-          ggtitle(paste0("Correlations for ", ph))
+          scale_x_log10() + scale_y_log10() +
+          ggtitle(paste0("Correlations for ", ph)) +
+          theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5))
       out_func(paste0("cor_",ph), p)
     }
    }
