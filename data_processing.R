@@ -1,13 +1,12 @@
 
 
-convert_czech_numeric <- function(column) {
-  result <- as.numeric(gsub(",",".", column, fixed = TRUE))
+convert_uncertain_phenotype <- function(column) {
+  result <- as.numeric(gsub("!","", column, fixed = TRUE))
   if(any(is.na(result) != is.na(column))) {
     stop("Problem converting")
   }
   result
 }
-
 
 functional_group_for_gene <- function(gene) {
   case_when(
@@ -21,34 +20,40 @@ functional_group_for_gene <- function(gene) {
 
 read_main_data <- function() {
   
-  data <- read_excel(here("private_data","--META-DATA-5.xlsx"), sheet = "DATA 5") %>%
-    rename(case_no = "source case n.", mut_nucl = "mu nucl", mut_amino = "principal mutation", mut_type = "mu-type", additional_mutation = "additional mutation", REPROD = "Reprod. organs abnorm") %>%
-    select(source, case_no,gene, mut_nucl, mut_amino, mut_type, 
-           Sex, Age, RD:speech) %>%
-    mutate(CI = convert_czech_numeric(CI), DD = convert_czech_numeric(DD),
-           LIV = convert_czech_numeric(LIV), REN = convert_czech_numeric(REN),
-           REPROD = convert_czech_numeric(REPROD),
-           Sex = factor(toupper(Sex)), 
-           source = factor(source)
+  data <- read_excel(here("private_data","EV table 2 dataset new.xlsx"), sheet = "List1") %>%
+    rename(case_no = "source case n.", additional_mutations = "additional mutations", mutation_types = "mut/mut") %>%
+    filter(!is.na(source) | !is.na(gene)) %>% #NA in source is only in the empty rows at the end of the table
+    select(source, case_no,gene, mutation_types, 
+           sex, age, RD:LIV) %>%
+    mutate(
+           CI = convert_uncertain_phenotype(CI),
+           LIV = convert_uncertain_phenotype(LIV),
+           REN = convert_uncertain_phenotype(REN),
+           REP = convert_uncertain_phenotype(REP),
+           Sex = factor(toupper(sex)), 
+           source = factor(source),
+           loss_of_function = factor(case_when(
+                                     is.na(mutation_types) ~ "unknown",
+                                     mutation_types == "trunc/trunc" ~ "certain",
+                                     TRUE ~ "unknown"
+                                     ), levels = c("unknown","certain")),
+           loss_of_function_certain = as.numeric(loss_of_function == "certain")
     ) %>%
     rowid_to_column("ID") %>%  
     
     #Get age categories
-    mutate(Age_corr = if_else(Age == "5 month", as.character(5/12), gsub(",",".", Age)),
-           age_numbers = if_else(grepl("^[0-9]*\\.?[0-9]*$",Age_corr), Age_corr, NA_character_) %>% as.numeric(),
+    mutate(age_corr = if_else(age == "5 month", as.character(5/12), gsub(",",".", age)),
+           age_numbers = if_else(grepl("^[0-9]*\\.?[0-9]*$",age_corr), age_corr, NA_character_) %>% as.numeric(),
            age_group = factor(case_when(
-             is.na(Age_corr) ~ NA_character_,
+             is.na(age_corr) ~ NA_character_,
              !is.na(age_numbers) ~ 
                case_when(
                  age_numbers < 10 ~ "0-9",
                  age_numbers < 20 ~ "10-19",
-                 age_numbers < 30 ~ "20-29",
-                 age_numbers < 40 ~ "30-39",
-                 age_numbers < 50 ~ "40-49",
-                 age_numbers < 60 ~ "50-59",
-                 TRUE ~ "60+",
+                 age_numbers < 40 ~ "20-39",
+                 TRUE ~ "40+",
                ),
-             TRUE ~ Age_corr
+             TRUE ~ age_corr
            ))
     ) %>%
     
@@ -56,14 +61,11 @@ read_main_data <- function() {
     mutate(age_numbers_groups_guessed = 
              case_when(
                !is.na(age_numbers) ~ age_numbers,
-               is.na(Age_corr) ~ NA_real_,
-               Age_corr == "0-9" ~ 5,
-               Age_corr == "10-19" ~ 15,
-               Age_corr == "20-29" ~ 25,
-               Age_corr == "30-39" ~ 35,
-               Age_corr == "40-49" ~ 45,
-               Age_corr == "50-59" ~ 55,
-               Age_corr == "60+" ~ 65
+               is.na(age_corr) ~ NA_real_,
+               age_corr == "0-9" ~ 5,
+               age_corr == "10-19" ~ 15,
+               age_corr == "20-39" ~ 30,
+               age_corr == "40+" ~ 50
              ),
            age_std_for_model = (age_numbers_groups_guessed - mean(age_numbers_groups_guessed, na.rm=TRUE))/ sd(age_numbers_groups_guessed, na.rm = TRUE)
     ) %>%
@@ -78,22 +80,18 @@ read_main_data <- function() {
              functional_group_for_gene(gene) %>% factor()
     ) 
   
-  if(!all(is.na(data$Age) == is.na(data$age_group))) {
+  if(!all(is.na(data$age) == is.na(data$age_group))) {
     stop("Error in age transforms")
   }
-  if(!all(is.na(data$Age) == is.na(data$age_numbers_groups_guessed))) {
+  if(!all(is.na(data$age) == is.na(data$age_numbers_groups_guessed))) {
     stop("Error in age transforms")
   }
-  if(!all(is.na(data$Age) == is.na(data$age_std_for_model))) {
+  if(!all(is.na(data$age) == is.na(data$age_std_for_model))) {
     stop("Error in age transforms")
   }
-  if(!(identical(suppressWarnings(as.numeric(data$Age_corr)), data$age_numbers))) {
+  if(!(identical(suppressWarnings(as.numeric(data$age_corr)), data$age_numbers))) {
     stop("Error in age transforms")
   }
-  
-  #For some reasone this cannot be done with dplyr
-  data$hyposmia_anosmia = data$`hyposmia/anosmia`
-  data$`hyposmia/anosmia` = NULL
   
   data
 }
@@ -101,7 +99,7 @@ read_main_data <- function() {
 
 data_long_from_data  <- function(data) {
   data_long_all <- data %>% 
-    gather("phenotype","phenotype_value",RD:speech) 
+    gather("phenotype","phenotype_value",RD:LIV) 
   
   data_long_all %>% group_by(phenotype) %>% summarise(count = sum(!is.na(phenotype_value)), prop = mean(phenotype_value, na.rm = TRUE))
   

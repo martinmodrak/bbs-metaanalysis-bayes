@@ -16,7 +16,7 @@ my_ppc_bars_grouped <- function(...) {
 
 run_pp_checks <- function(fit, data_long, 
                           types = c("overall","gene","phenotype","functional_group","functional_group_phenotype",
-                                    "sex", "sex_phenotype","age","age_phenotype"), 
+                                    "sex", "sex_phenotype","age","age_phenotype", "gene_lof", "phenotype_lof"), 
                           prediction_filter = NULL,
                           out_func = print) {
   
@@ -31,14 +31,21 @@ run_pp_checks <- function(fit, data_long,
   observed <- data$phenotype_value
   
   if("overall" %in% types) {
-    my_ppc_bars(data_filtered$phenotype_value, predicted) %>% out_func
+    my_ppc_bars(data$phenotype_value, predicted) %>% out_func
   }
   if("gene" %in% types) {
-    my_ppc_bars_grouped(data_filtered$phenotype_value, predicted, group = data$gene) %>% out_func
+    my_ppc_bars_grouped(data$phenotype_value, predicted, group = data$gene) %>% out_func
+  }
+  if("gene_lof" %in% types) {
+    my_ppc_bars_grouped(data$phenotype_value, predicted, group = interaction(data$loss_of_function, data$gene)) %>% out_func
   }
   if("phenotype" %in% types) {
-    my_ppc_bars_grouped(data_filtered$phenotype_value, predicted, group = data$phenotype) %>% out_func
+    my_ppc_bars_grouped(data$phenotype_value, predicted, group = data$phenotype) %>% out_func
   }
+  if("phenotype_lof" %in% types) {
+    my_ppc_bars_grouped(data$phenotype_value, predicted, group = interaction(data$loss_of_function, data$phenotype)) %>% out_func
+  }
+  
   
   if("functional_group" %in% types) {
     my_ppc_bars_grouped(observed, predicted, group = data$functional_group) %>% out_func
@@ -227,11 +234,12 @@ plot_gene_phenotype_differences_estimates <- function(fit, data_for_prediction, 
 plot_pairwise_differences <- function(fit, data_for_prediction, 
                                       plot_types = c("heatmap_min","heatmap_max","heatmap_ci_excl","linerange_all"), 
                                       out_func = function(name, plot) {print(plot)},
-                                      title_add = "") {
+                                      title_add = "", phenotypes_to_show = unique(data_for_prediction$phenotype)) {
   samples_tidy <- get_tidy_samples(fit, data_for_prediction) 
   samples_diff <- samples_tidy %>% 
     select(-source) %>%
     inner_join(samples_tidy %>% select(-source), by = c("sample" = "sample","phenotype" = "phenotype")) %>%
+    filter(phenotype %in% phenotypes_to_show) %>%
     mutate(odds.x = (value.x / (1 - value.x)),
            odds.y = (value.y / (1 - value.y)), odds_ratio =  odds.x / odds.y)
   
@@ -320,7 +328,8 @@ plot_pairwise_differences <- function(fit, data_for_prediction,
       ggplot(aes(x = gene.x, y = gene.y, fill = min_probable_OR)) +
         geom_tile(width = 1, height = 1) +
         scale_fill_gradient2("     ", low = "#ca0020", high = "#0571b0", mid = "#f7f7f7", 
-                             trans = "log10", breaks = c(0.5,1,2), limits = c(0.5,2)) +
+                             trans = "log10", breaks = c(0.5,1,2)) +
+        expand_limits(fill = c( c(0.5,1,2))) +
         theme_heatmap +
         facet_wrap(~phenotype, ncol = 4) +
       ggtitle(paste0("Odds ratio, 95% conservative", title_add))
@@ -401,3 +410,46 @@ plot_pairwise_differences <- function(fit, data_for_prediction,
     out_func(p)
   }  
 }
+
+
+plot_lof_differences_estimates <- function(fit, data_for_prediction, genes_to_show = unique(data_for_prediction$gene), group_title = "Gene") {
+  if(is.null(data_for_prediction[["group"]])) {
+    data_for_prediction$group <- data_for_prediction$gene
+  }
+  
+  data_for_prediction_lof <-  data_for_prediction %>% mutate(loss_of_function_certain = 1) %>% rbind(
+    data_for_prediction %>% mutate(loss_of_function_certain = 0)
+  )
+  
+  samples_tidy_lof <- get_tidy_samples(fit, data_for_prediction_lof)
+  
+
+  data_to_plot <- samples_tidy_lof %>% 
+    filter(gene %in% genes_to_show, loss_of_function_certain == 1) %>%
+    inner_join(samples_tidy_lof %>% filter(loss_of_function_certain == 0), 
+               by = c("phenotype" = "phenotype", "gene" = "gene", "group" = "group", "sample" = "sample", 
+                      "functional_group" = "functional_group")) %>%
+  #mutate(relative = value - avg) %>%
+    mutate(relative = odds.x / odds.y) %>%
+    group_by(phenotype, group, functional_group) %>%
+    summarise(Estimate = median(relative), 
+              lower = quantile(relative, posterior_interval_bounds[1]),
+              upper = quantile(relative, posterior_interval_bounds[2]),
+              lower50 = quantile(relative, 0.25),
+              upper50 = quantile(relative, 0.75)
+    )
+  
+  data_to_plot %>% ggplot(aes(x = group, y = Estimate, ymin = lower, ymax = upper, color = functional_group)) +
+    geom_hline(yintercept = 1, color = "darkred")+ 
+    geom_linerange(aes(ymin = lower50, ymax = upper50), size = 2) +
+    geom_linerange() +
+    facet_wrap(~phenotype, scales = "free_y", ncol = 4)  + 
+    scale_y_log10("Odds ratio", labels = simple_num_format) +
+    scale_x_discrete(group_title) +
+    scale_alpha_continuous(range = c(0.1,0.6)) +
+    scale_size_continuous(range = c(0.5,3)) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5)) +
+    guides(color = FALSE, size = FALSE, alpha = FALSE)   +
+    ggtitle("Odds ratio certain loss of function vs. others")
+}
+  

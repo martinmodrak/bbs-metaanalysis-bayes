@@ -116,6 +116,32 @@ data_for_prediction_gene_source_BBSome <- data_for_prediction_gene_source %>% fi
 
 ```
 
+# Source
+
+```{r}
+
+priors <- c(intercept_prior, sd_prior)
+
+#The file argument
+fit_gene_source <- brm(formula_gene_source, prior = priors, data = data_long, control = list(adapt_delta = 0.9),
+                     file = here(stored_fits_dir,"gene_source"))
+fit_gene_source
+run_pp_checks(fit_gene_source, data_long, types = c("gene_lof","phenotype_lof"))
+```
+
+
+```{r, fig.width=8, fig.height=4}
+plot_gene_phenotype_differences_estimates(fit_gene_source, data_for_prediction_gene_source, genes_to_show = genes_to_show)
+plot_gene_phenotype_differences_estimates(fit_gene_source, data_for_prediction_gene_source_BBSome)
+
+```
+
+
+```{r, fig.width=10, fig.height=7}
+plot_pairwise_differences(fit_gene_source, data_for_prediction_gene_source_BBSome)
+
+
+```
 
 # Source, gene correlations
 
@@ -209,6 +235,22 @@ plot_gene_phenotype_differences_estimates(fit_gene_source_nocor, data_for_predic
 plot_gene_phenotype_differences_estimates(fit_gene_source_nocor, data_for_prediction_gene_source_BBSome)
 
 plot_pairwise_differences(fit_gene_source_nocor, data_for_prediction_gene_source_BBSome)
+
+```
+
+# Source, filtered for loss of function
+
+```{r}
+priors <- c(intercept_prior, sd_prior)
+
+fit_gene_source_filtered_lof <- brm(formula_gene_source, prior = priors, data = data_long %>% filter(loss_of_function == "certain"), control = list(adapt_delta = 0.9),
+                     file = here(stored_fits_dir,"gene_source_filtered_lof"))
+fit_gene_source_filtered_lof
+#run_pp_checks(fit_gene_source_filtered_lof, data_long)
+plot_gene_phenotype_differences_estimates(fit_gene_source_filtered_lof, data_for_prediction_gene_source, genes_to_show = genes_to_show)
+plot_gene_phenotype_differences_estimates(fit_gene_source_filtered_lof, data_for_prediction_gene_source_BBSome)
+
+plot_pairwise_differences(fit_gene_source_filtered_lof, data_for_prediction_gene_source_BBSome)
 
 ```
 
