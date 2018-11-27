@@ -97,6 +97,9 @@ fit_gene_only
 data_for_prediction_gene_only <- tibble(gene = genes_to_show) %>%
     crossing(tibble(phenotype = phenotypes_to_show)) %>% mutate(functional_group = functional_group_for_gene(gene))
 
+data_for_prediction_gene_only_BBSome <- data_for_prediction_gene_only %>% filter(functional_group_for_gene(gene) == "BBSome", gene != "BBS18")
+
+
 plot_gene_phenotype_estimates(
   fit_gene_only,
   data_for_prediction_gene_only 
@@ -113,6 +116,30 @@ data_for_prediction_gene_source <- tibble(gene = genes_to_show, source = "new_so
     crossing(tibble(phenotype = phenotypes_to_show)) %>% mutate(functional_group = functional_group_for_gene(gene))
 
 data_for_prediction_gene_source_BBSome <- data_for_prediction_gene_source %>% filter(functional_group_for_gene(gene) == "BBSome", gene != "BBS18")
+
+```
+
+# Gene only - filtered for LOF
+
+# Source, filtered for loss of function
+
+```{r}
+priors <- c(intercept_prior, sd_prior)
+
+data_long_filter_lof <- data_long %>% filter(loss_of_function == "certain")
+fit_gene_filtered_lof <- brm(formula_gene_only, prior = priors, data = data_long_filter_lof, control = list(adapt_delta = 0.9),
+                     file = here(stored_fits_dir,"gene_only_filtered_lof"))
+fit_gene_filtered_lof
+run_pp_checks(fit_gene_filtered_lof, data_long_filter_lof, types = c("age_phenotype","sex_phenotype"))
+plot_gene_phenotype_differences_estimates(fit_gene_filtered_lof, data_for_prediction_gene_only, genes_to_show = genes_to_show)
+plot_gene_phenotype_differences_estimates(fit_gene_filtered_lof, data_for_prediction_gene_only_BBSome)
+
+plot_pairwise_differences(fit_gene_filtered_lof, data_for_prediction_gene_only_BBSome)
+
+```
+
+```{r, fig.width=10, fig.height=7}
+plot_pairwise_differences(fit_gene_filtered_lof, data_for_prediction_gene_only_BBSome, plot_types = "linerange_all")
 
 ```
 
@@ -238,6 +265,26 @@ plot_pairwise_differences(fit_gene_source_nocor, data_for_prediction_gene_source
 
 ```
 
+# Loss of function + gene
+
+```{r}
+priors <- c(intercept_prior, sd_prior)
+
+formula_gene_lof <- brmsformula(update(formula_gene_only, ~ . + ((0 + phenotype : loss_of_function_certain)||gene)) , family = "bernoulli")
+fit_gene_lof <- brm(formula_gene_lof, prior = priors, data = data_long, control = list(adapt_delta = 0.9),
+                     file = here(stored_fits_dir,"gene_lof"))
+fit_gene_lof
+run_pp_checks(fit_gene_lof, data_long, types = c("sex_phenotype","age_phenotype"))
+data_for_prediction_gene_lof <- data_for_prediction_gene_only %>% mutate(loss_of_function_certain = 1)
+data_for_prediction_gene_lof_BBSome <- data_for_prediction_gene_lof %>%  filter(functional_group_for_gene(gene) == "BBSome", gene != "BBS18")
+
+plot_gene_phenotype_differences_estimates(fit_gene_lof, data_for_prediction_gene_lof, genes_to_show = genes_to_show)
+plot_gene_phenotype_differences_estimates(fit_gene_lof, data_for_prediction_gene_lof_BBSome)
+
+plot_pairwise_differences(fit_gene_lof, data_for_prediction_gene_lof_BBSome)
+
+```
+
 # Source, filtered for loss of function
 
 ```{r}
@@ -251,6 +298,11 @@ plot_gene_phenotype_differences_estimates(fit_gene_source_filtered_lof, data_for
 plot_gene_phenotype_differences_estimates(fit_gene_source_filtered_lof, data_for_prediction_gene_source_BBSome)
 
 plot_pairwise_differences(fit_gene_source_filtered_lof, data_for_prediction_gene_source_BBSome)
+
+```
+
+```{r, fig.width=10, fig.height=7}
+plot_pairwise_differences(fit_gene_source_filtered_lof, data_for_prediction_gene_source_lof_BBSome, plot_types = "linerange_all")
 
 ```
 
