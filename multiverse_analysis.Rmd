@@ -121,8 +121,6 @@ data_for_prediction_gene_source_BBSome <- data_for_prediction_gene_source %>% fi
 
 # Gene only - filtered for LOF
 
-# Source, filtered for loss of function
-
 ```{r}
 priors <- c(intercept_prior, sd_prior)
 
@@ -130,7 +128,7 @@ data_long_filter_lof <- data_long %>% filter(loss_of_function == "certain")
 fit_gene_filtered_lof <- brm(formula_gene_only, prior = priors, data = data_long_filter_lof, control = list(adapt_delta = 0.9),
                      file = here(stored_fits_dir,"gene_only_filtered_lof"))
 fit_gene_filtered_lof
-run_pp_checks(fit_gene_filtered_lof, data_long_filter_lof, types = c("age_phenotype","sex_phenotype"))
+run_pp_checks(fit_gene_filtered_lof, data_long_filter_lof, types = c("age_phenotype","sex_phenotype", "source"))
 plot_gene_phenotype_differences_estimates(fit_gene_filtered_lof, data_for_prediction_gene_only, genes_to_show = genes_to_show)
 plot_gene_phenotype_differences_estimates(fit_gene_filtered_lof, data_for_prediction_gene_only_BBSome)
 
@@ -153,7 +151,7 @@ priors <- c(intercept_prior, sd_prior)
 fit_gene_source <- brm(formula_gene_source, prior = priors, data = data_long, control = list(adapt_delta = 0.9),
                      file = here(stored_fits_dir,"gene_source"))
 fit_gene_source
-run_pp_checks(fit_gene_source, data_long, types = c("gene_lof","phenotype_lof"))
+run_pp_checks(fit_gene_source, data_long, types = c("sex_phenotype","age_phenotype", "gene_lof","phenotype_lof", "source"))
 ```
 
 
@@ -274,7 +272,7 @@ formula_gene_lof <- brmsformula(update(formula_gene_only, ~ . + ((0 + phenotype 
 fit_gene_lof <- brm(formula_gene_lof, prior = priors, data = data_long, control = list(adapt_delta = 0.9),
                      file = here(stored_fits_dir,"gene_lof"))
 fit_gene_lof
-run_pp_checks(fit_gene_lof, data_long, types = c("sex_phenotype","age_phenotype"))
+run_pp_checks(fit_gene_lof, data_long, types = c("sex_phenotype","age_phenotype", "source"))
 data_for_prediction_gene_lof <- data_for_prediction_gene_only %>% mutate(loss_of_function_certain = 1)
 data_for_prediction_gene_lof_BBSome <- data_for_prediction_gene_lof %>%  filter(functional_group_for_gene(gene) == "BBSome", gene != "BBS18")
 

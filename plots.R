@@ -36,6 +36,9 @@ run_pp_checks <- function(fit, data_long,
   if("gene" %in% types) {
     my_ppc_bars_grouped(data$phenotype_value, predicted, group = data$gene) %>% out_func
   }
+  if("source" %in% types) {
+    my_ppc_bars_grouped(data$phenotype_value, predicted, group = data$source) %>% out_func
+  }
   if("gene_lof" %in% types) {
     my_ppc_bars_grouped(data$phenotype_value, predicted, group = interaction(data$loss_of_function, data$gene)) %>% out_func
   }
@@ -72,6 +75,11 @@ run_pp_checks <- function(fit, data_long,
   
   if("age_phenotype" %in% types) {
     my_ppc_bars_grouped(observed, predicted, group = interaction(age_fct, data$phenotype)) %>% out_func
+  }
+
+  gene_groups = if_else(data$functional_group == "BBSome" & data$gene != "BBS18", as.character(data$gene), "other")
+  if("gene_phenotype" %in% types) {
+    my_ppc_bars_grouped(observed, predicted, group = interaction(gene_groups, data$phenotype)) %>% out_func
   }
   
 }
