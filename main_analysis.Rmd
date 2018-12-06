@@ -40,11 +40,7 @@ TODO:
 This is a supplement for the paper XXXX.
 
 TODO:
-- zohlednit loss of function (asi musi byt horsi nez jine, tj. omezit znamenko)
-- loss of function nemeni relativni riziko ruznzch fenotypu, ale absolutni riziko
-- udelat obrazky jako pro hlavni analyzu, ale predikovat jen pro loss of function
-- budou se zamerovat na REN
-- pridat odds ratio pro kazdy gen/fenotyp mezi LOF a ostatni
+- hlavni analyza bude bez LOF (v supplementu vysvětlit, proč je horší - horší vzájemný fit)
 
 This document describes the Bayesian analysis reported in the main manuscript. A separate supplementary file (TODO add ID of the file) describes the multiverse analysis where we test how the results change with different modelling assumptions. All references to "multiverse analysis" in this text point to this document.
 
