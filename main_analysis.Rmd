@@ -41,6 +41,12 @@ This is a supplement for the paper XXXX.
 
 TODO:
 - hlavni analyza bude bez LOF (v supplementu vysvětlit, proč je horší - horší vzájemný fit)
+- 
+    data uvedena v pořadí RD - OBE - PD - CI - REP - REN - HEART - LIV
+    colors: BBS3 "red" #f8766dff, BBSome "blue" #5f8dd3ff, chaperonins "gold" #aa8800ff
+    aby na osách vždycky bylo měřítko, co je skutečně měřítko :-)
+    kdyby popisky mohly být Arial vel. 7, bylo by to úplně nejlepší
+
 
 This document describes the Bayesian analysis reported in the main manuscript. A separate supplementary file (TODO add ID of the file) describes the multiverse analysis where we test how the results change with different modelling assumptions. All references to "multiverse analysis" in this text point to this document.
 
@@ -84,14 +90,14 @@ phenotypes_to_use
 
 The data shows considerable between-study (source) variability (showing only the BBSome genes for clarity):
 
-```{r}
+```{r, fig.width=8, fig.height=4}
 data_long %>% 
   group_by(source, phenotype, gene) %>% 
   filter(functional_group == "BBSome", gene != "BBS18") %>%
   summarise(n_patients = length(phenotype_value), proportion = sum(phenotype_value) / n_patients) %>%
   ggplot(aes(x = gene, y = proportion, size = n_patients, color = gene)) +
   geom_jitter(alpha = 0.3, height = 0, width = 0.3) +
-  facet_wrap(~phenotype) +
+  facet_wrap(~phenotype, ncol = 4) +
   scale_y_continuous("Proportion of phenotype") +
   scale_size_continuous(range = c(0.5,4)) +
   guides(color = FALSE) +
@@ -309,6 +315,18 @@ differences_bbsome_plot <- plot_gene_phenotype_differences_estimates(fit_gene_so
 differences_bbsome_plot 
 ```
 
+## Summary for Chaperonins
+
+```{r, fig.width=8, fig.height=4}
+
+data_for_prediction_gene_source_lof_chaperonins <- data_for_prediction_gene_source_lof %>% filter(functional_group_for_gene(gene) == "Chaperonins")
+
+
+differences_chaperonins_plot <- plot_gene_phenotype_differences_estimates(fit_gene_source_lof, data_for_prediction_gene_source_lof_chaperonins, data_original = data_long)
+differences_chaperonins_plot 
+```
+
+
 
 ## Effect of loss of function
 
@@ -398,6 +416,9 @@ for(type in types) {
   differences_func_group_plot %>% ggsave(paste0("functional_groups", type), plot = ., path = img_path,height = std_height, width = 5)
   
   differences_bbsome_plot %>% ggsave(paste0("bbsome_overall", type), plot = ., path = img_path,height = std_height, width = std_width)
+  
+  differences_chaperonins_plot %>% ggsave(paste0("chaperonins_overall", type), plot = ., path = img_path,height = std_height, width = std_width)
+  
   
   lof_plot %>% ggsave(paste0("loss_of_function", type), plot = ., path = img_path,height = std_height, width = std_width)
   

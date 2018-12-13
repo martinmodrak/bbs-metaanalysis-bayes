@@ -2,6 +2,15 @@ posterior_interval <- 0.95
 posterior_interval_bounds <- c(0.5 * (1 - posterior_interval), 1 - (0.5 * (1 - posterior_interval)))
 
 
+base_theme <- theme( 
+                    axis.title = element_text(size = 7), 
+                    axis.text = element_text(size = 7), 
+                    legend.title = element_text(size = 8),
+                    legend.text = element_text(size = 7),
+                    strip.text = element_text(size = 7))
+
+scale_color_functional_group <- scale_color_manual(values = c(BBS03 = "#f8766dff", BBSome = "#5f8dd3ff", Chaperonins = "#aa8800ff"))
+
 my_ppc <- function(fun, ...) {
   fun(..., prob = posterior_interval, fatten = 1.5, freq = FALSE)
 }
@@ -100,7 +109,8 @@ plot_gene_phenotype_estimates <- function(fit, data_for_prediction) {
     geom_linerange() + 
     geom_linerange(aes(ymin = Q25, ymax = Q75), size = 2) +
     facet_wrap(~phenotype, ncol = 4)  +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5))
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5)) +
+    base_theme
   
 }
 
@@ -144,6 +154,9 @@ plot_gene_phenotype_differences_estimates <- function(fit, data_for_prediction, 
               upper50 = quantile(relative, 0.75)
     )
 
+  min_OR_to_certainly_include <- 0.1
+  max_OR_to_certainly_include <- 10
+  
   if(is.null(data_original)) {
     original_geom = NULL 
     limits_geom = NULL
@@ -187,8 +200,8 @@ plot_gene_phenotype_differences_estimates <- function(fit, data_for_prediction, 
     
     phenotype_limits <- phenotype_limits_points %>%
       inner_join(phenotype_limits_intervals, by = c("phenotype" = "phenotype")) %>%
-      mutate(min_or = pmin(min_or_intervals, min_or_points), 
-             max_or = pmax(max_or_intervals, max_or_points),
+      mutate(min_or = pmin(min_or_intervals, min_or_points, min_OR_to_certainly_include), 
+             max_or = pmax(max_or_intervals, max_or_points, max_OR_to_certainly_include),
              limits_ratio = max_or / min_or
              )
     
@@ -231,11 +244,14 @@ plot_gene_phenotype_differences_estimates <- function(fit, data_for_prediction, 
     geom_linerange(aes(ymin = lower50, ymax = upper50), size = 2) +
     geom_linerange() +
     facet_wrap(~phenotype, scales = "free_y", ncol = 4)  + 
+    scale_color_functional_group +
     scale_y_log10("Odds ratio", labels = simple_num_format) +
     scale_x_discrete(group_title) +
     scale_alpha_continuous(range = c(0.1,0.6)) +
     scale_size_continuous(range = c(0.5,3)) +
+    expand_limits(y = c(min_OR_to_certainly_include, max_OR_to_certainly_include)) +
     theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5)) +
+    base_theme +
     guides(color = FALSE, size = FALSE, alpha = FALSE)
 }
 
@@ -245,8 +261,7 @@ plot_pairwise_differences <- function(fit, data_for_prediction,
                                       title_add = "", phenotypes_to_show = unique(data_for_prediction$phenotype)) {
   samples_tidy <- get_tidy_samples(fit, data_for_prediction) 
   samples_diff <- samples_tidy %>% 
-    select(-source) %>%
-    inner_join(samples_tidy %>% select(-source), by = c("sample" = "sample","phenotype" = "phenotype")) %>%
+    inner_join(samples_tidy, by = c("sample" = "sample","phenotype" = "phenotype")) %>%
     filter(phenotype %in% phenotypes_to_show) %>%
     mutate(odds.x = (value.x / (1 - value.x)),
            odds.y = (value.y / (1 - value.y)), odds_ratio =  odds.x / odds.y)
@@ -323,6 +338,7 @@ plot_pairwise_differences <- function(fit, data_for_prediction,
       geom_tile(width = 1, height = 1) +
       scale_fill_gradient2(limits = lims, 
                            low = "#ca0020", mid = "#f7f7f7", high = "#0571b0") +
+      base_theme +
       theme_heatmap +
       facet_wrap(~phenotype, ncol = 4) +
       ggtitle(paste0("Widest credible interval excluding 0", title_add))
@@ -338,6 +354,7 @@ plot_pairwise_differences <- function(fit, data_for_prediction,
         scale_fill_gradient2("     ", low = "#ca0020", high = "#0571b0", mid = "#f7f7f7", 
                              trans = "log10", breaks = c(0.5,1,2)) +
         expand_limits(fill = c( c(0.5,1,2))) +
+        base_theme +
         theme_heatmap +
         facet_wrap(~phenotype, ncol = 4) +
       ggtitle(paste0("Odds ratio, 95% conservative", title_add))
@@ -352,6 +369,7 @@ plot_pairwise_differences <- function(fit, data_for_prediction,
       ggplot(aes(x = gene.x, y = gene.y, fill = max_probable_OR)) +
       geom_tile(width = 1, height = 1) +
       scale_fill_distiller("     ", palette = "Spectral", trans = "log10") +
+      base_theme +
       theme_heatmap +
       facet_wrap(~phenotype, ncol = 4)+
       ggtitle(paste0("Odds ratio, 95% extreme", title_add))
@@ -375,16 +393,19 @@ plot_pairwise_differences <- function(fit, data_for_prediction,
         geom_segment(aes(x = lower50, xend = upper50, y = gene.x, yend = gene.x), size = 2) +
         scale_linerange +
         scale_linerange_color +
+        base_theme +
         facet_grid( ~ gene.y)  +
         ggtitle(paste0("95% and 50% credible intervals for pairwise odds ratios",ph , title_add))
       out_func(paste0("linerange_", ph, title_add), p)
     }
   }
 
-  theme_linerange_all <- theme(axis.text=element_text(size=8), strip.text = element_text(size = 9),
-                               axis.title = element_blank(), 
-                               legend.title = element_text(size = 11,angle = 270, vjust = 0.2),
-                               legend.text = element_text(size = 8))
+  # theme_linerange_all <- theme(axis.text=element_text(size=8), strip.text = element_text(size = 9),
+  #                              axis.title = element_blank(), 
+  #                              legend.title = element_text(size = 11,angle = 270, vjust = 0.2),
+  #                              legend.text = element_text(size = 8))
+  theme_linerange_all <- theme(axis.title = element_blank(), 
+                               legend.title = element_text(angle = 270, vjust = 0.2))
   
   if("linerange_all" %in% plot_types) {
       p <- data_for_diff %>% 
@@ -397,6 +418,7 @@ plot_pairwise_differences <- function(fit, data_for_prediction,
         scale_linerange +
         scale_linerange_color +
         facet_grid(phenotype ~ gene.x)  +
+        base_theme +
         theme_linerange_all +
         ggtitle(paste0("95% and 50% credible intervals for pairwise odds ratios", title_add))
       out_func(paste0("linerange_all", title_add), p)
@@ -413,6 +435,7 @@ plot_pairwise_differences <- function(fit, data_for_prediction,
       scale_linerange_color +
       facet_grid(gene.x ~ gene.y) +
       theme_linerange_all  +
+      base_theme +
       ggtitle(paste0("95% and 50% credible intervals for pairwise differences", title_add))
     out_func(paste0("linerange_all2", title_add), p)
     out_func(p)
@@ -452,10 +475,12 @@ plot_lof_differences_estimates <- function(fit, data_for_prediction, genes_to_sh
     geom_linerange(aes(ymin = lower50, ymax = upper50), size = 2) +
     geom_linerange() +
     facet_wrap(~phenotype, scales = "free_y", ncol = 4)  + 
+    scale_color_functional_group +
     scale_y_log10("Odds ratio", labels = simple_num_format) +
     scale_x_discrete(group_title) +
     scale_alpha_continuous(range = c(0.1,0.6)) +
     scale_size_continuous(range = c(0.5,3)) +
+    base_theme +
     theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5)) +
     guides(color = FALSE, size = FALSE, alpha = FALSE)   +
     ggtitle("Odds ratio certain loss of function vs. others")

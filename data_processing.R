@@ -99,17 +99,21 @@ read_main_data <- function() {
 
 data_long_from_data  <- function(data) {
   data_long_all <- data %>% 
-    gather("phenotype","phenotype_value",RD:LIV) 
-  
-  data_long_all %>% group_by(phenotype) %>% summarise(count = sum(!is.na(phenotype_value)), prop = mean(phenotype_value, na.rm = TRUE))
-  
-  
+    gather("phenotype","phenotype_value",RD:LIV)
+
   functional_groups_to_show <- data$functional_group %>% unique()
   
   data_long <- data_long_all %>%
     filter(phenotype %in% phenotypes_to_use) %>%
     filter(!is.na(phenotype_value)) %>%
-    mutate(phenotype_value = as.integer(if_else(phenotype_value == 0, 0 , 1)))
+    mutate(phenotype_value = as.integer(if_else(phenotype_value == 0, 0 , 1)),
+           phenotype = factor(phenotype, levels = phenotypes_to_use)
+           )
   
+  if(any(is.na(data_long$phenotype))) {
+    stop("Some phenotypes are NA")
+  }
+    
+    
   data_long  
 }

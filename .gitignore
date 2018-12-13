@@ -31,7 +31,6 @@ vignettes/*.pdf
 # Temporary files created by R markdown
 *.utf8.md
 *.knit.md
-*.nb.html
 
 
 # Shiny token, see https://shiny.rstudio.com/articles/shinyapps.html
@@ -41,3 +40,9 @@ rsconnect/
 /stored_fits/
 /tmp_pics/
 .Rproj.user
+
+# Notebook outputs
+*.pdf
+*.nb.html
+*.html
+*.tex

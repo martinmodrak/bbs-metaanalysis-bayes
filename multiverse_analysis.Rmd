@@ -178,13 +178,13 @@ priors <- c(intercept_prior, sd_prior)
 fit_gene_source_genecor <- brm(formula_gene_source_genecor, prior = priors, data = data_long, control = list(adapt_delta = 0.9),
                      file = here(stored_fits_dir,"gene_source_genecor"))
 fit_gene_source_genecor
-
-for(to_show in genes_to_show) {
-  if(to_show == "BBS12") {
-    next
-  }
-  stanplot(fit_gene_source_genecor, pars = paste0("cor.*",to_show,".*(", paste0(genes_to_show, collapse = "|"),")"), type = "intervals", point_est = "none", prob_outer = posterior_interval) %>% print()
-}
+# 
+# for(to_show in genes_to_show) {
+#   if(to_show == "BBS12") {
+#     next
+#   }
+#   stanplot(fit_gene_source_genecor, pars = paste0("cor.*",to_show,".*(", paste0(genes_to_show, collapse = "|"),")"), type = "intervals", point_est = "none", prob_outer = posterior_interval) %>% print()
+# }
 #run_pp_checks(fit_gene_source_genecor, data_long)
 ```
 
@@ -298,6 +298,15 @@ plot_gene_phenotype_differences_estimates(fit_gene_source_filtered_lof, data_for
 plot_pairwise_differences(fit_gene_source_filtered_lof, data_for_prediction_gene_source_BBSome)
 
 ```
+
+```{r}
+data_for_prediction_gene_source_lof <- tibble(gene = genes_to_show, source = "new_source", loss_of_function_certain = 1) %>%
+    crossing(tibble(phenotype = phenotypes_to_show)) %>% mutate(functional_group = functional_group_for_gene(gene))
+
+data_for_prediction_gene_source_lof_BBSome <- data_for_prediction_gene_source_lof %>% filter(functional_group_for_gene(gene) == "BBSome", gene != "BBS18")
+
+```
+
 
 ```{r, fig.width=10, fig.height=7}
 plot_pairwise_differences(fit_gene_source_filtered_lof, data_for_prediction_gene_source_lof_BBSome, plot_types = "linerange_all")
