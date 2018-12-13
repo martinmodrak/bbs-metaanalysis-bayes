@@ -41,11 +41,7 @@ This is a supplement for the paper XXXX.
 
 TODO:
 - hlavni analyza bude bez LOF (v supplementu vysvětlit, proč je horší - horší vzájemný fit)
-- 
-    data uvedena v pořadí RD - OBE - PD - CI - REP - REN - HEART - LIV
-    colors: BBS3 "red" #f8766dff, BBSome "blue" #5f8dd3ff, chaperonins "gold" #aa8800ff
-    aby na osách vždycky bylo měřítko, co je skutečně měřítko :-)
-    kdyby popisky mohly být Arial vel. 7, bylo by to úplně nejlepší
+
 
 
 This document describes the Bayesian analysis reported in the main manuscript. A separate supplementary file (TODO add ID of the file) describes the multiverse analysis where we test how the results change with different modelling assumptions. All references to "multiverse analysis" in this text point to this document.
@@ -229,10 +225,9 @@ We use a generalized linear model with logit link and hierarchial terms. Let us 
 For the model, we expand the data into long form, i.e. each row in the dataset corresponds to a combination of patient and reported phenotype (a patient with reported values for 3 phenotypes would correspond to 3 rows in the long form dataset). The model is specified with the following brms formula, using the Bernoulli family with logit link function:
 
 ```{r}
-formula_gene_source_lof
+formula_gene_source
 ```
 
-TODO LOF do math notation
 this can be expressed in mathematical notation as:
 
 $$
@@ -277,17 +272,17 @@ First a summary of the model fit as posterior intervals for main model parameter
 priors <- c(intercept_prior, sd_prior)
 
 #The file argument
-fit_gene_source_lof <- brm(formula_gene_source_lof, prior = priors, data = data_long, control = list(adapt_delta = 0.9),
-                     file = here(stored_fits_dir,"gene_source_lof"))
-fit_gene_source_lof
+fit_gene_source <- brm(formula_gene_source, prior = priors, data = data_long, control = list(adapt_delta = 0.9),
+                     file = here(stored_fits_dir,"gene_source"))
+fit_gene_source
 #run_pp_checks(fit_gene_source, data_long)
 ```
 
 ```{r}
-data_for_prediction_gene_source_lof <- tibble(gene = genes_to_show, source = "new_source", loss_of_function_certain = 1) %>%
+data_for_prediction_gene_source <- tibble(gene = genes_to_show, source = "new_source") %>%
     crossing(tibble(phenotype = phenotypes_to_show)) %>% mutate(functional_group = functional_group_for_gene(gene))
 
-data_for_prediction_gene_source_lof_BBSome <- data_for_prediction_gene_source_lof %>% filter(functional_group_for_gene(gene) == "BBSome", gene != "BBS18")
+data_for_prediction_gene_source_BBSome <- data_for_prediction_gene_source %>% filter(functional_group_for_gene(gene) == "BBSome", gene != "BBS18")
 ```
 
 The fitted model parameters themselves are however hard to interpret, as they operate on log-odds scale. It is also hard to say how to handle the between-study variability of coefficients. And this variability  is substantial - note that the `sd` parameters under `~source` (corresponding to $\sigma_3$) admit ranges from $1.11$ to $5.09$, so the odds of a phenotype, given a mutation can plausibly differ between studies by $1.96 \times \pm 1.11 = \pm 2.16$ to $1.96 \times \pm 5.09 = \pm 9.97$ _on the log scale_ (95% of mass of a normal distribution is within $1.96 \times \sigma$ from the mean).
@@ -302,7 +297,7 @@ Posterior 95% (thin) and 50% (thick) credible intervals for ratio of odds for a 
 
 
 ```{r, fig.width=8, fig.height=4}
-differences_func_group_plot <- plot_gene_phenotype_differences_estimates(fit_gene_source_lof, data_for_prediction_gene_source_lof %>% mutate(group = functional_group), genes_to_show = genes_to_show, group_title = "Functional group", data_original = data_long %>% mutate(group = functional_group))
+differences_func_group_plot <- plot_gene_phenotype_differences_estimates(fit_gene_source, data_for_prediction_gene_source %>% mutate(group = functional_group), genes_to_show = genes_to_show, group_title = "Functional group", data_original = data_long %>% mutate(group = functional_group))
 differences_func_group_plot
 ```
 
@@ -311,7 +306,7 @@ differences_func_group_plot
 Posterior 95% (thin) and 50% (thick) credible intervals for ratio of odds for a phenotype given a mutation in a gene to odds for the phenotype given a random mutation across all genes shown. All mutations are assumed to be equally likely - the odds are not weighed by the frequency of the mutations in the dataset. Odds ratios are shown on the log scale and each phenotype has its own scale. Gray dots show the same odds ratio calculated for individual studies included in the metanalysis. Dots below the dashed lines correspond to studies where the empirical odds ratio is 0 or infinity. Dot size represents the number of relevant cases in the study.
 
 ```{r, fig.width=8, fig.height=4}
-differences_bbsome_plot <- plot_gene_phenotype_differences_estimates(fit_gene_source_lof, data_for_prediction_gene_source_lof_BBSome, genes_to_show = genes_to_show, data_original = data_long)
+differences_bbsome_plot <- plot_gene_phenotype_differences_estimates(fit_gene_source, data_for_prediction_gene_source_BBSome, genes_to_show = genes_to_show, data_original = data_long)
 differences_bbsome_plot 
 ```
 
@@ -319,40 +314,12 @@ differences_bbsome_plot
 
 ```{r, fig.width=8, fig.height=4}
 
-data_for_prediction_gene_source_lof_chaperonins <- data_for_prediction_gene_source_lof %>% filter(functional_group_for_gene(gene) == "Chaperonins")
+data_for_prediction_gene_source_chaperonins <- data_for_prediction_gene_source %>% filter(functional_group_for_gene(gene) == "Chaperonins")
 
 
-differences_chaperonins_plot <- plot_gene_phenotype_differences_estimates(fit_gene_source_lof, data_for_prediction_gene_source_lof_chaperonins, data_original = data_long)
+differences_chaperonins_plot <- plot_gene_phenotype_differences_estimates(fit_gene_source, data_for_prediction_gene_source_chaperonins, data_original = data_long)
 differences_chaperonins_plot 
 ```
-
-
-
-## Effect of loss of function
-
-```{r}
-lof_plot <-  plot_lof_differences_estimates(fit_gene_source_lof, data_for_prediction_gene_source_lof_BBSome)
-lof_plot
-```
-
-In most cases, the loss of function does not make for a big difference in predictions. This is because there is no strong distinction in the data itself:
-
-```{r, fig.width=8, fig.height=4}
-lof_data_plot <- data_long %>% 
-  group_by(source, phenotype, gene, loss_of_function) %>% 
-  filter(functional_group == "BBSome", gene != "BBS18") %>%
-  summarise(n_patients = length(phenotype_value), proportion = sum(phenotype_value) / n_patients) %>%
-  ggplot(aes(x = gene, y = proportion, size = n_patients, color = loss_of_function)) +
-  geom_jitter(alpha = 0.3, height = 0, width = 0.2) +
-  facet_wrap(~phenotype, nrow = 2) +
-  scale_y_continuous("Proportion of phenotype") +
-  scale_size_continuous(range = c(0.5,4)) +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5))
-
-lof_data_plot
-```
-
-
 
 # Pairwise comparisons of mutations in BBSome genes
 
@@ -368,7 +335,7 @@ The reported odds ratio are for gene on the horizontal axis against the gene on 
 This shows pairs where we are fairly certain there is a systematic difference and the minimal magnitude of this difference consistent with the data.
 
 ```{r, fig.width=8, fig.height=4}
-plot_pairwise_differences(fit_gene_source_lof, data_for_prediction_gene_source_lof_BBSome,  "heatmap_min")
+plot_pairwise_differences(fit_gene_source, data_for_prediction_gene_source_BBSome,  "heatmap_min")
 ```
 
 ## Extreme estimates
@@ -380,7 +347,7 @@ This shows maximal differences consistent with our model and lets us constrain t
 
 ```{r, fig.width=8, fig.height=4}
 
-plot_pairwise_differences(fit_gene_source_lof, data_for_prediction_gene_source_lof_BBSome, plot_types = "heatmap_max")
+plot_pairwise_differences(fit_gene_source, data_for_prediction_gene_source_BBSome, plot_types = "heatmap_max")
 ```
 
 
@@ -391,14 +358,10 @@ Posterior 95% (thin) and 50% (thick) credible intervals for odds ratio for a phe
 This plot integrates the information shown in the plots above and some more.
 
 ```{r, fig.width=10, fig.height=7}
-plot_pairwise_differences(fit_gene_source_lof, data_for_prediction_gene_source_lof_BBSome, plot_types = "linerange_all")
+plot_pairwise_differences(fit_gene_source, data_for_prediction_gene_source_BBSome, plot_types = "linerange_all")
 
 ```
 
-
-```{r, fig.width=8, fig.height=4}
-plot_lof_differences_estimates(fit_gene_source_lof, data_for_prediction_gene_source_lof_BBSome)
-```
 
 
 # Saving figures for publication
@@ -419,16 +382,11 @@ for(type in types) {
   
   differences_chaperonins_plot %>% ggsave(paste0("chaperonins_overall", type), plot = ., path = img_path,height = std_height, width = std_width)
   
-  
-  lof_plot %>% ggsave(paste0("loss_of_function", type), plot = ., path = img_path,height = std_height, width = std_width)
-  
-  lof_data_plot %>% ggsave(paste0("loss_of_function_data", type), plot = ., path = img_path,height = std_height, width = std_width)
-  
-  plot_pairwise_differences(fit_gene_source_lof, data_for_prediction_gene_source_lof_BBSome, plot_types = c("heatmap_min", "heatmap_max"), out_func = function(name, plot) {
+  plot_pairwise_differences(fit_gene_source, data_for_prediction_gene_source_BBSome, plot_types = c("heatmap_min", "heatmap_max"), out_func = function(name, plot) {
     ggsave(paste0(name, type), plot = plot, path = img_path,height = std_height, width = std_width)
   })
   
-  plot_pairwise_differences(fit_gene_source_lof, data_for_prediction_gene_source_lof_BBSome, plot_types = "linerange_all", out_func = function(name, plot) {
+  plot_pairwise_differences(fit_gene_source, data_for_prediction_gene_source_BBSome, plot_types = "linerange_all", out_func = function(name, plot) {
     ggsave(paste0(name, type), plot = plot, path = img_path,height = 7, width = 10)
   })
 }
@@ -475,7 +433,7 @@ For a complete picture, let's look at pairwise differences between the 3 most co
 data_for_prediction_LIV <- tibble(gene = c("BBS01", "BBS02", "BBS04", "BBS03", "BBS06", "BBS10", "BBS12"), source = "new_source", loss_of_function_certain = 1) %>%
     crossing(tibble(phenotype = phenotypes_to_show))
 
-plot_pairwise_differences(fit_gene_source_lof, data_for_prediction_LIV, plot_types = "linerange_all")
+plot_pairwise_differences(fit_gene_source, data_for_prediction_LIV, plot_types = "linerange_all")
 
 ```
 

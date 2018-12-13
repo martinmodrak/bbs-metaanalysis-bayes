@@ -283,6 +283,27 @@ plot_pairwise_differences(fit_gene_lof, data_for_prediction_gene_lof_BBSome)
 
 ```
 
+# Source + lof
+
+TODO
+
+In most cases, the loss of function does not make for a big difference in predictions. This is because there is no strong distinction in the data itself:
+
+```{r, fig.width=8, fig.height=4}
+lof_data_plot <- data_long %>% 
+  group_by(source, phenotype, gene, loss_of_function) %>% 
+  filter(functional_group == "BBSome", gene != "BBS18") %>%
+  summarise(n_patients = length(phenotype_value), proportion = sum(phenotype_value) / n_patients) %>%
+  ggplot(aes(x = gene, y = proportion, size = n_patients, color = loss_of_function)) +
+  geom_jitter(alpha = 0.3, height = 0, width = 0.2) +
+  facet_wrap(~phenotype, nrow = 2) +
+  scale_y_continuous("Proportion of phenotype") +
+  scale_size_continuous(range = c(0.5,4)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5))
+
+lof_data_plot
+```
+
 # Source, filtered for loss of function
 
 ```{r}
