@@ -26,9 +26,6 @@ Text:
 
 
 
-Ke zvazeni:
-- obarvit linerange plynule dle p_diff?
-
 ```{r setup}
 library(rstan)
 library(brms)
@@ -44,7 +41,8 @@ library(bayesplot)
 library(cowplot)
 
 source(here("data_processing.R"))
-source(here("modelling_base.R"))
+source(here("models.R"))
+source(here("models_funcs.R"))
 source(here("plots.R"))
 
 stored_fits_dir <- "stored_fits"
@@ -65,223 +63,40 @@ genes_to_show <- genes_to_show_from_data(data)
 data_long <- data_long_from_data(data)
 ```
 
-# K vyreseni
-
-TODO co s pulkami? - konflikt informací z různých studií - ignorovat
-
-Druh korelace?
-Formula 1 + (0+gene)|phenotype - korelace je 8x8, tj. vliv na renalni dispatii je korelovany mezi geny (což nechceme)
-Je podivné, že je korelace RD a REN, když RD mají skoro všichni (ověřit, jestli to není problém)
-
-Co dvojí mutace? - zatím ignorovoat
-
-BBSom se ještě dělí na 1,2+7,4+8,5,9 (ale to ignorovat)
-
-# Gene only
-
-```{r}
-#get_prior(formula_gene_only, data = data_long)
-priors <- c(intercept_prior, sd_prior)
-
-#make_stancode(formula_gene_only, data_long, prior = priors)
-
-fit_gene_only <- brm(formula_gene_only, prior = priors, data = data_long , control = list(adapt_delta = 0.95),
-                     file = here(stored_fits_dir,"gene_only"))
-fit_gene_only
-```
-
 
 
 ```{r}
-#run_pp_checks(fit_gene_only, data_long)
 data_for_prediction_gene_only <- tibble(gene = genes_to_show) %>%
     crossing(tibble(phenotype = phenotypes_to_show)) %>% mutate(functional_group = functional_group_for_gene(gene))
 
 data_for_prediction_gene_only_BBSome <- data_for_prediction_gene_only %>% filter(functional_group_for_gene(gene) == "BBSome", gene != "BBS18")
 
 
-plot_gene_phenotype_estimates(
-  fit_gene_only,
-  data_for_prediction_gene_only 
-  )
-
-plot_gene_phenotype_differences_estimates(fit_gene_only, data_for_prediction_gene_only, genes_to_show = genes_to_show)
-
-
-```
-
-
-```{r}
 data_for_prediction_gene_source <- tibble(gene = genes_to_show, source = "new_source") %>%
     crossing(tibble(phenotype = phenotypes_to_show)) %>% mutate(functional_group = functional_group_for_gene(gene))
 
 data_for_prediction_gene_source_BBSome <- data_for_prediction_gene_source %>% filter(functional_group_for_gene(gene) == "BBSome", gene != "BBS18")
 
-```
-
-# Gene only - filtered for LOF
-
-```{r}
-priors <- c(intercept_prior, sd_prior)
-
 data_long_filter_lof <- data_long %>% filter(loss_of_function == "certain")
-fit_gene_filtered_lof <- brm(formula_gene_only, prior = priors, data = data_long_filter_lof, control = list(adapt_delta = 0.9),
-                     file = here(stored_fits_dir,"gene_only_filtered_lof"))
-fit_gene_filtered_lof
-run_pp_checks(fit_gene_filtered_lof, data_long_filter_lof, types = c("age_phenotype","sex_phenotype", "source"))
-plot_gene_phenotype_differences_estimates(fit_gene_filtered_lof, data_for_prediction_gene_only, genes_to_show = genes_to_show)
-plot_gene_phenotype_differences_estimates(fit_gene_filtered_lof, data_for_prediction_gene_only_BBSome)
 
-plot_pairwise_differences(fit_gene_filtered_lof, data_for_prediction_gene_only_BBSome)
+data_for_prediction_gene_source_lof <- tibble(gene = genes_to_show, source = "new_source", loss_of_function_certain = 1) %>%
+    crossing(tibble(phenotype = phenotypes_to_show)) %>% mutate(functional_group = functional_group_for_gene(gene))
 
-```
+plot_pairwise_differences(fit_gene_source_age_imputed, data_for_prediction_gene_source_BBSome %>% crossing(age_std_for_model = age_transform(c(10,30,50))))
 
-```{r, fig.width=10, fig.height=7}
-plot_pairwise_differences(fit_gene_filtered_lof, data_for_prediction_gene_only_BBSome, plot_types = "linerange_all")
+plot_pairwise_differences(fit_gene_source_age_sex_imputed, data_for_prediction_gene_source_BBSome %>% crossing(tibble(Sex = c("M","F"))) %>% crossing(age_std_for_model = age_transform(c(10,30,50))))
 
 ```
-
-# Source
 
 ```{r}
 
-priors <- c(intercept_prior, sd_prior)
-
-#The file argument
-fit_gene_source <- brm(formula_gene_source, prior = priors, data = data_long, control = list(adapt_delta = 0.9),
-                     file = here(stored_fits_dir,"gene_source"))
-fit_gene_source
-run_pp_checks(fit_gene_source, data_long, types = c("sex_phenotype","age_phenotype", "gene_lof","phenotype_lof", "source"))
-```
-
-
-```{r, fig.width=8, fig.height=4}
-plot_gene_phenotype_differences_estimates(fit_gene_source, data_for_prediction_gene_source, genes_to_show = genes_to_show)
-plot_gene_phenotype_differences_estimates(fit_gene_source, data_for_prediction_gene_source_BBSome)
 
 ```
 
-
-```{r, fig.width=10, fig.height=7}
-plot_pairwise_differences(fit_gene_source, data_for_prediction_gene_source_BBSome)
+adapt_delta = 0.95
 
 
-```
 
-# Source, gene correlations
-
-```{r}
-formula_gene_source_genecor <- brmsformula(phenotype_value ~ (1 || phenotype) + ((0 + gene) | phenotype) + ((0 + phenotype) || source), family = "bernoulli")
-
-priors <- c(intercept_prior, sd_prior)
-
-fit_gene_source_genecor <- brm(formula_gene_source_genecor, prior = priors, data = data_long, control = list(adapt_delta = 0.9),
-                     file = here(stored_fits_dir,"gene_source_genecor"))
-fit_gene_source_genecor
-# 
-# for(to_show in genes_to_show) {
-#   if(to_show == "BBS12") {
-#     next
-#   }
-#   stanplot(fit_gene_source_genecor, pars = paste0("cor.*",to_show,".*(", paste0(genes_to_show, collapse = "|"),")"), type = "intervals", point_est = "none", prob_outer = posterior_interval) %>% print()
-# }
-#run_pp_checks(fit_gene_source_genecor, data_long)
-```
-
-```{r}
-plot_gene_phenotype_differences_estimates(fit_gene_source_genecor, data_for_prediction_gene_source, genes_to_show = genes_to_show)
-plot_gene_phenotype_differences_estimates(fit_gene_source_genecor, data_for_prediction_gene_source_BBSome)
-
-plot_pairwise_differences(fit_gene_source_genecor, data_for_prediction_gene_source_BBSome)
-
-```
-
-# Source, narrower priors
-
-```{r}
-priors <- c(intercept_prior, sd_prior, prior(normal(0, 1), class = sd, group = gene))
-
-fit_gene_source_narrow <- brm(formula_gene_source, prior = priors, data = data_long, control = list(adapt_delta = 0.9),
-                     file = here(stored_fits_dir,"gene_source_narrow"))
-fit_gene_source_narrow
-#run_pp_checks(fit_gene_source_nocor, data_long)
-plot_gene_phenotype_differences_estimates(fit_gene_source_narrow, data_for_prediction_gene_source, genes_to_show = genes_to_show)
-plot_gene_phenotype_differences_estimates(fit_gene_source_narrow, data_for_prediction_gene_source_BBSome)
-
-plot_pairwise_differences(fit_gene_source_narrow, data_for_prediction_gene_source_BBSome)
-
-```
-
-# Source, very narrow priors
-
-```{r}
-priors <- c(intercept_prior, sd_prior, prior(normal(0,0.1), class = sd, group = gene))
-
-fit_gene_source_very_narrow <- brm(formula_gene_source, prior = priors, data = data_long, control = list(adapt_delta = 0.9),
-                     file = here(stored_fits_dir,"gene_source_very_narrow"))
-fit_gene_source_very_narrow
-#run_pp_checks(fit_gene_source_nocor, data_long)
-plot_gene_phenotype_differences_estimates(fit_gene_source_very_narrow, data_for_prediction_gene_source, genes_to_show = genes_to_show)
-plot_gene_phenotype_differences_estimates(fit_gene_source_very_narrow, data_for_prediction_gene_source_BBSome)
-
-plot_pairwise_differences(fit_gene_source_very_narrow, data_for_prediction_gene_source_BBSome)
-
-```
-
-
-# Source, wide priors
-
-```{r}
-priors <- c(prior(normal(0,5), class = Intercept), prior(normal(0,5), class = sd))
-
-fit_gene_source_narrow <- brm(formula_gene_source, prior = priors, data = data_long, control = list(adapt_delta = 0.9),
-                     file = here(stored_fits_dir,"gene_source_narrow"))
-fit_gene_source_narrow
-#run_pp_checks(fit_gene_source_nocor, data_long)
-plot_gene_phenotype_differences_estimates(fit_gene_source_narrow, data_for_prediction_gene_source, genes_to_show = genes_to_show)
-plot_gene_phenotype_differences_estimates(fit_gene_source_narrow, data_for_prediction_gene_source_BBSome)
-
-plot_pairwise_differences(fit_gene_source_narrow, data_for_prediction_gene_source_BBSome)
-
-```
-
-# Source, no phenotype correlations
-
-```{r}
-formula_gene_source_nocor <- brmsformula(phenotype_value ~ (1 || phenotype) + ((0 + phenotype)||gene) + ((0 + phenotype) || source)  , family = "bernoulli")
-
-priors <- c(intercept_prior, sd_prior)
-
-fit_gene_source_nocor <- brm(formula_gene_source_nocor, prior = priors, data = data_long, control = list(adapt_delta = 0.9),
-                     file = here(stored_fits_dir,"gene_source_nocor"))
-fit_gene_source_nocor
-#run_pp_checks(fit_gene_source_nocor, data_long)
-plot_gene_phenotype_differences_estimates(fit_gene_source_nocor, data_for_prediction_gene_source, genes_to_show = genes_to_show)
-plot_gene_phenotype_differences_estimates(fit_gene_source_nocor, data_for_prediction_gene_source_BBSome)
-
-plot_pairwise_differences(fit_gene_source_nocor, data_for_prediction_gene_source_BBSome)
-
-```
-
-# Loss of function + gene
-
-```{r}
-priors <- c(intercept_prior, sd_prior)
-
-formula_gene_lof <- brmsformula(update(formula_gene_only, ~ . + ((0 + phenotype : loss_of_function_certain)||gene)) , family = "bernoulli")
-fit_gene_lof <- brm(formula_gene_lof, prior = priors, data = data_long, control = list(adapt_delta = 0.9),
-                     file = here(stored_fits_dir,"gene_lof"))
-fit_gene_lof
-run_pp_checks(fit_gene_lof, data_long, types = c("sex_phenotype","age_phenotype", "source"))
-data_for_prediction_gene_lof <- data_for_prediction_gene_only %>% mutate(loss_of_function_certain = 1)
-data_for_prediction_gene_lof_BBSome <- data_for_prediction_gene_lof %>%  filter(functional_group_for_gene(gene) == "BBSome", gene != "BBS18")
-
-plot_gene_phenotype_differences_estimates(fit_gene_lof, data_for_prediction_gene_lof, genes_to_show = genes_to_show)
-plot_gene_phenotype_differences_estimates(fit_gene_lof, data_for_prediction_gene_lof_BBSome)
-
-plot_pairwise_differences(fit_gene_lof, data_for_prediction_gene_lof_BBSome)
-
-```
 
 # Source + lof
 
@@ -304,57 +119,6 @@ lof_data_plot <- data_long %>%
 lof_data_plot
 ```
 
-# Source, filtered for loss of function
-
-```{r}
-priors <- c(intercept_prior, sd_prior)
-
-fit_gene_source_filtered_lof <- brm(formula_gene_source, prior = priors, data = data_long %>% filter(loss_of_function == "certain"), control = list(adapt_delta = 0.9),
-                     file = here(stored_fits_dir,"gene_source_filtered_lof"))
-fit_gene_source_filtered_lof
-#run_pp_checks(fit_gene_source_filtered_lof, data_long)
-plot_gene_phenotype_differences_estimates(fit_gene_source_filtered_lof, data_for_prediction_gene_source, genes_to_show = genes_to_show)
-plot_gene_phenotype_differences_estimates(fit_gene_source_filtered_lof, data_for_prediction_gene_source_BBSome)
-
-plot_pairwise_differences(fit_gene_source_filtered_lof, data_for_prediction_gene_source_BBSome)
-
-```
-
-```{r}
-data_for_prediction_gene_source_lof <- tibble(gene = genes_to_show, source = "new_source", loss_of_function_certain = 1) %>%
-    crossing(tibble(phenotype = phenotypes_to_show)) %>% mutate(functional_group = functional_group_for_gene(gene))
-
-data_for_prediction_gene_source_lof_BBSome <- data_for_prediction_gene_source_lof %>% filter(functional_group_for_gene(gene) == "BBSome", gene != "BBS18")
-
-```
-
-
-```{r, fig.width=10, fig.height=7}
-plot_pairwise_differences(fit_gene_source_filtered_lof, data_for_prediction_gene_source_lof_BBSome, plot_types = "linerange_all")
-
-```
-
-# Source & Sex - Filtered
-
-```{r}
-data_long_with_sex <- data_long %>% filter(!is.na(Sex)) %>% droplevels()
-
-formula_gene_source_sex <- brmsformula(update.formula(formula_gene_source,  ~ . + (1||Sex : phenotype)) , family = "bernoulli")
-
-priors <- c(intercept_prior, sd_prior)
-
-fit_gene_source_sex <- brm(formula_gene_source_sex, prior = priors, data = data_long_with_sex, control = list(adapt_delta = 0.9),
-                     file = here(stored_fits_dir,"gene_source_sex"))
-fit_gene_source_sex
-#run_pp_checks(fit_gene_source_sex, data_long_with_sex)
-plot_gene_phenotype_differences_estimates(fit_gene_source_sex, data_for_prediction_gene_source %>% mutate(Sex = "M"))
-plot_gene_phenotype_differences_estimates(fit_gene_source_sex, data_for_prediction_gene_source %>% mutate(Sex = "F"))
-
-plot_pairwise_differences(fit_gene_source_sex, data_for_prediction_gene_source_BBSome %>% mutate(Sex = "M"))
-plot_pairwise_differences(fit_gene_source_sex, data_for_prediction_gene_source_BBSome %>% mutate(Sex = "F"))
-
-
-```
 
 # Imputation with mice
 
@@ -388,89 +152,17 @@ data_long_mice %>% map(my_hist_func)
 
 ```
 
-
-# Source & Sex - Imputed
-
 ```{r}
-priors <- c(intercept_prior, sd_prior)
+models_imputed <- list(
+  gene_source_imputed_sex = list(formula = formula_gene_source_sex, priors = default_priors, components = c("gene", "source", "sex"), filter = c()),
 
-
-fit_gene_source_sex_imputed <- brm_multiple(formula_gene_source_sex, prior = priors, data = data_long_mice, control = list(adapt_delta = 0.95),
-                     file = here(stored_fits_dir,"gene_source_sex_imputed"))
-fit_gene_source_sex_imputed
-run_pp_checks(fit_gene_source_sex_imputed, data_long, 
-              types = c("sex", "sex_phenotype", "age", "age_phenotype"), prediction_filter = !is.na(data_long$Sex))
-
-run_pp_checks(fit_gene_source_sex_imputed, data_long, 
-              types = c("sex", "sex_phenotype", "age", "age_phenotype"))
-
-plot_gene_phenotype_differences_estimates(fit_gene_source_sex_imputed, data_for_prediction_gene_source %>% mutate(Sex = "M"), genes_to_show = genes_to_show)
-plot_gene_phenotype_differences_estimates(fit_gene_source_sex_imputed, data_for_prediction_gene_source %>% mutate(Sex = "F"), genes_to_show = genes_to_show)
-
-plot_pairwise_differences(fit_gene_source_sex_imputed, data_for_prediction_gene_source_BBSome %>% mutate(Sex = "M"))
-plot_pairwise_differences(fit_gene_source_sex_imputed, data_for_prediction_gene_source_BBSome %>% mutate(Sex = "F"))
-
+  gene_source_imputed_age = list(formula = formula_gene_source_age, priors = default_priors, components = c("gene", "source", "age"), filter = c()),
+  
+  gene_source_imputed_age_sex = list(formula = brmsformula(update.formula(formula_gene_source, ~ . + (0 + age_std_for_model||phenotype)), family = "bernoulli"), priors = default_priors, components = c("gene", "source", "age", "sex"), filter = c())
+)
 ```
 
 
-# Source + Age imputed
-
-There are `r sum(is.na(data$age_numbers) & !is.na(data$Age))` rows that only have age category. We have guessed the middle of the respective category to keep the model simple.
-
-
-```{r}
-formula_gene_source_age <- brmsformula(update.formula(formula_gene_source, ~ . + (0 + age_std_for_model||phenotype)), family = "bernoulli")
-
-priors <- c(intercept_prior, sd_prior)
-
-fit_gene_source_age_imputed <- brm_multiple(formula_gene_source_age, prior = priors, data = data_long_mice, control = list(adapt_delta = 0.95),
-                     file = here(stored_fits_dir,"gene_source_age_imputed"))
-fit_gene_source_age_imputed
-
-#run_pp_checks(fit_gene_source_age_imputed, data_long_mice[[1]])
-
-age_transform <- function(x) {
-  (x - mean(data$age_numbers_groups_guessed, na.rm=TRUE))/ sd(data$age_numbers_groups_guessed, na.rm = TRUE)
-}
-
-plot_gene_phenotype_differences_estimates(fit_gene_source_age_imputed, 
-                                          data_for_prediction_gene_source %>% 
-                                            mutate(age_std_for_model = age_transform(10)), genes_to_show = genes_to_show)
-plot_gene_phenotype_differences_estimates(fit_gene_source_age_imputed, 
-                                          data_for_prediction_gene_source %>% 
-                                            mutate(age_std_for_model = age_transform(30)), genes_to_show = genes_to_show)
-plot_gene_phenotype_differences_estimates(fit_gene_source_age_imputed, 
-                                          data_for_prediction_gene_source %>% 
-                                            mutate(age_std_for_model = age_transform(50)), genes_to_show = genes_to_show)
-
-plot_pairwise_differences(fit_gene_source_age_imputed, data_for_prediction_gene_source_BBSome %>% crossing(age_std_for_model = age_transform(c(10,30,50))))
-
-```
-
-```{r}
-formula_gene_source_age_sex <- brmsformula(update.formula(formula_gene_source_sex, ~ . +(0 + age_std_for_model||phenotype)), family = "bernoulli")
-
-priors <- c(intercept_prior, sd_prior)
-
-fit_gene_source_age_sex_imputed <- brm_multiple(formula_gene_source_age_sex, prior = priors, data = data_long_mice, control = list(adapt_delta = 0.95),
-                     file = here(stored_fits_dir,"gene_source_age_sex_imputed"))
-fit_gene_source_age_sex_imputed
-
-#run_pp_checks(fit_gene_source_age_sex_imputed, data_long_mice[[1]])
-
-plot_gene_phenotype_differences_estimates(fit_gene_source_age_sex_imputed, 
-                                          data_for_prediction_gene_source %>% 
-                                            mutate(age_std_for_model = age_transform(10), sex = "M"), genes_to_show = genes_to_show)
-plot_gene_phenotype_differences_estimates(fit_gene_source_age_sex_imputed, 
-                                          data_for_prediction_gene_source %>% 
-                                            mutate(age_std_for_model = age_transform(30), sex = "F"), genes_to_show = genes_to_show)
-plot_gene_phenotype_differences_estimates(fit_gene_source_age_sex_imputed, 
-                                          data_for_prediction_gene_source %>% 
-                                            mutate(age_std_for_model = age_transform(50), sex = "F"), genes_to_show = genes_to_show)
-
-plot_pairwise_differences(fit_gene_source_age_sex_imputed, data_for_prediction_gene_source_BBSome %>% crossing(tibble(Sex = c("M","F"))) %>% crossing(age_std_for_model = age_transform(c(10,30,50))))
-
-```
 
 ```{r}
 sessionInfo()
