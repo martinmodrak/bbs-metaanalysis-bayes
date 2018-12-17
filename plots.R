@@ -115,17 +115,6 @@ plot_gene_phenotype_estimates <- function(fit, data_for_prediction) {
 }
 
 
-get_tidy_samples <- function(fit, data_for_prediction) {
-  fitted_detailed <- fitted(fit, data_for_prediction, summary = FALSE, allow_new_levels = TRUE, nsamples = 1000)
-  
-  samples_tidy <- data_for_prediction %>% 
-    cbind(as.tibble(t(fitted_detailed))) %>%
-    gather("sample","value", V1:V1000) %>%
-    mutate(odds = value/(1-value))
-  
-}
-
-
 simple_num_format <- function(x) {format(x, digits = 1, scientific = FALSE, drop0trailing = TRUE)}
 
 
@@ -255,16 +244,12 @@ plot_gene_phenotype_differences_estimates <- function(fit, data_for_prediction, 
     guides(color = FALSE, size = FALSE, alpha = FALSE)
 }
 
-plot_pairwise_differences <- function(fit, data_for_prediction, 
+plot_pairwise_differences <- function(model_def, fit, data_for_prediction, 
                                       plot_types = c("heatmap_min","heatmap_max","heatmap_ci_excl","linerange_all"), 
                                       out_func = function(name, plot) {print(plot)},
-                                      title_add = "", phenotypes_to_show = unique(data_for_prediction$phenotype)) {
+                                      title_add = "") {
   samples_tidy <- get_tidy_samples(fit, data_for_prediction) 
-  samples_diff <- samples_tidy %>% 
-    inner_join(samples_tidy, by = c("sample" = "sample","phenotype" = "phenotype")) %>%
-    filter(phenotype %in% phenotypes_to_show) %>%
-    mutate(odds.x = (value.x / (1 - value.x)),
-           odds.y = (value.y / (1 - value.y)), odds_ratio =  odds.x / odds.y)
+  samples_diff <- get_samples_pairwise_diff(model_def, samples_tidy)
   
   
   if("cor" %in% plot_types) {

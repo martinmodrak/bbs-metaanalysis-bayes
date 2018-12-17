@@ -27,28 +27,35 @@ formula_gene_source_sex <- brmsformula(update.formula(formula_gene_source,  ~ . 
 
 formula_gene_source_age <- brmsformula(update.formula(formula_gene_source, ~ . + (0 + age_std_for_model||phenotype)), family = "bernoulli")                                       
 
+formula_gene_age_sex <- brmsformula(update(formula_gene_only, ~ . + (1||Sex : phenotype) + (0 + age_std_for_model||phenotype)) , 
+                               family = "bernoulli")
+
 models_base <- list(
   gene_only = list(
     formula = formula_gene_only, 
     priors = default_priors, 
+    note = "",
     additional_components = c(), filter = "none"
     ),
   
   gene_only_filtered_lof = list(
     formula = formula_gene_only, 
     priors = default_priors, 
+    note = "",
     additional_components = c(), filter = "lof"
     ),
   
   gene_source = list(
     formula = formula_gene_source, 
     priors = default_priors, 
+    note = "",
     additional_components = c("source"), filter = "none"
     ),
   
   gene_source_filtered_lof = list(
     formula = formula_gene_source, 
     priors = default_priors, 
+    note = "",
     additional_components = c("source"), filter = "lof"
     ),
 
@@ -57,24 +64,28 @@ models_base <- list(
                             ((0 + phenotype) || source), 
                           family = "bernoulli"), 
     priors = default_priors, 
+    note = "",
     additional_components = c("source"), filter = "none"
     ),
   
   gene_source_narrow = list(
     formula = formula_gene_source, 
     priors = c(intercept_prior, sd_prior, prior(normal(0, 1), class = sd, group = gene)), 
+    note = "special priors",
     additional_components = c("source"), filter = "none"
     ),
   
   gene_source_very_narrow = list(
     formula = formula_gene_source, 
     priors = c(intercept_prior, sd_prior, prior(normal(0,0.1), class = sd, group = gene)), 
+    note = "special priors",
     additional_components = c("source"), filter = "none"
     ),
   
   gene_source_wide = list(
     formula = formula_gene_source, 
     priors = c(prior(normal(0,5), class = Intercept), prior(normal(0,5), class = sd)), 
+    note = "special priors",
     additional_components = c("source"), filter = "none"
     ),
   
@@ -83,6 +94,7 @@ models_base <- list(
                             ((0 + phenotype) || source)  , 
                           family = "bernoulli"), 
     priors = default_priors, 
+    note = "",
     additional_components = c("source"), filter = "none"
     ),
   
@@ -90,30 +102,42 @@ models_base <- list(
     formula = brmsformula(update(formula_gene_only, ~ . + ((0 + phenotype : loss_of_function_certain)||gene)) , 
                           family = "bernoulli"), 
     priors = default_priors, 
+    note = "",
     additional_components = c("lof"), filter = "none"
     ),
+
+  gene_age_sex = list(
+    formula = formula_gene_age_sex, 
+    priors = default_priors, 
+    note = "",
+    additional_components = c("age","sex"), filter = "age_sex"
+  ),
   
   gene_source_lof =  list(
     formula = formula_gene_source_lof, 
     priors = default_priors, 
+    note = "",
     additional_components = c("source", "lof"), filter = "none"
     ),
   
   gene_source_filtered_lof = list(
     formula = formula_gene_source, 
     priors = default_priors, 
+    note = "",
     additional_components = c("source"), filter = "lof"
     ),
   
   gene_source_filtered_sex = list(
     formula = formula_gene_source_sex, 
     priors = default_priors, 
+    note = "",
     additional_components = c("source", "sex"), filter = "sex"
     ),
   
   gene_source_filtered_age = list(
     formula = formula_gene_source_age, 
     priors = default_priors, 
+    note = "",
     additional_components = c("source", "age"), filter = "age"
     )
 ) %>% imap(
@@ -125,15 +149,24 @@ models_base <- list(
 
 
 models_imputed <- list(
+  gene_imputed_age_sex = list(
+    formula = formula_gene_age_sex, 
+    priors = default_priors, 
+    note = "",
+    additional_components = c("age", "sex")
+  ),
+  
   gene_source_imputed_sex = list(
     formula = formula_gene_source_sex, 
     priors = default_priors, 
+    note = "",
     additional_components = c("source", "sex")
     ),
   
   gene_source_imputed_age = list(
     formula = formula_gene_source_age, 
     priors = default_priors, 
+    note = "",
     additional_components = c("source", "age")
     ),
   
@@ -141,6 +174,7 @@ models_imputed <- list(
     formula = brmsformula(update.formula(formula_gene_source, ~ . + (0 + age_std_for_model||phenotype)), 
                           family = "bernoulli"), 
     priors = default_priors, 
+    note = "",
     additional_components = c("source", "age", "sex")
     )
 ) %>% imap(

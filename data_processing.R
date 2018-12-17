@@ -20,7 +20,7 @@ functional_group_for_gene <- function(gene) {
 
 read_main_data <- function() {
   
-  data <- read_excel(here("private_data","EV table 2 dataset new.xlsx"), sheet = "List1") %>%
+  data <- read_excel(here("private_data","EV table 2 dataset new-new.xlsx"), sheet = "List1") %>%
     rename(case_no = "source case n.", additional_mutations = "additional mutations", mutation_types = "mut/mut") %>%
     filter(!is.na(source) | !is.na(gene)) %>% #NA in source is only in the empty rows at the end of the table
     select(source, case_no,gene, mutation_types, 
@@ -50,8 +50,11 @@ read_main_data <- function() {
                case_when(
                  age_numbers < 10 ~ "0-9",
                  age_numbers < 20 ~ "10-19",
-                 age_numbers < 40 ~ "20-39",
-                 TRUE ~ "40+",
+                 age_numbers < 30 ~ "20-29",
+                 age_numbers < 40 ~ "30-39",
+                 age_numbers < 50 ~ "40-49",
+                 age_numbers < 60 ~ "50-59",
+                 TRUE ~ "60+",
                ),
              TRUE ~ age_corr
            ))
@@ -64,8 +67,11 @@ read_main_data <- function() {
                is.na(age_corr) ~ NA_real_,
                age_corr == "0-9" ~ 5,
                age_corr == "10-19" ~ 15,
-               age_corr == "20-39" ~ 30,
-               age_corr == "40+" ~ 50
+               age_corr == "20-29" ~ 25,
+               age_corr == "30-39" ~ 35,
+               age_corr == "40-49" ~ 45,
+               age_corr == "50-59" ~ 55,
+               age_corr == "60+" ~ 70
              ),
            age_std_for_model = (age_numbers_groups_guessed - mean(age_numbers_groups_guessed, na.rm=TRUE))/ sd(age_numbers_groups_guessed, na.rm = TRUE)
     ) %>%

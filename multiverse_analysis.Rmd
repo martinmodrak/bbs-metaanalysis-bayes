@@ -4,20 +4,8 @@ output: html_notebook
 ---
 
 TODO: 
-- pp check for individual mutations
-- vyfiltrovat, ktere pp check provadet
-- individual dif per phenotype - spojit do jednoho plotu
-- line range základní - sumarizovat pres funkcni skupiny, brát, "náhodnou mutaci pro pacienta", pak jen BBSome
-- osy nechat zvlášt pro fenotyp
-- obarvit dle funkčních skupin (i když je jen jedna skupina) + zvýraznit rozdíly mimo 0
-- vše na odds ratio
-- dodat obrázky do 19. 10.
-- - korelace 4-8
-
 - Rozdily v RD zmizi pri imputation Sex
 - min_probable_OR ma divný scale
-
-- srovnani pheno po radcich je prehlednejsi
 - podivat se na "divne" geny (případně vyhodit)
 
 Text:
@@ -25,6 +13,16 @@ Text:
 - Extremely skeptical prior is required to make a small portion of the 95% intervals not
 
 
+This describes all Bayesian models we tried throughout this project. 
+
+Further we discuss the reasoning behind our choice of model for the main analysis, in particular why between-study variability is crucial while age, sex and loss of function can be omitted.
+
+
+Finally we compute how the conclusions of the paper hold under all of the models.
+
+# Model description
+
+All models are logistic regression using `brms`.
 
 ```{r setup}
 library(rstan)
@@ -45,60 +43,104 @@ source(here("models.R"))
 source(here("models_funcs.R"))
 source(here("plots.R"))
 
-stored_fits_dir <- "stored_fits"
-if(!dir.exists(here(stored_fits_dir))) {
-  dir.create(here(stored_fits_dir))
-}
-
 ```
 
-```{r}
+
+```{r load_data}
 data <- read_main_data()
-```
-
-
-```{r}
 genes_to_show <- genes_to_show_from_data(data)
-
 data_long <- data_long_from_data(data)
 ```
 
+## Base models
+
+Base models are those that work with (a subset of) the original dataset, without any imputation. The models are defined in file `models.R`. They differ in the model formula, subsets of the dataset they use and priors for model coefficients. Here is the list of base models.
+
+```{r}
+models_base %>% map_df(function(def) {
+  tibble(name = def$name, formula = as.character(def$formula)[1], filter = def$filter,  note = def$note)
+})
+```
+
+
+```{r fit_base_models}
+fits_base <- models_base %>%
+  map(function(def) {
+     fit_base_model(def, data_long)
+  }
+) 
+```
 
 
 ```{r}
-data_for_prediction_gene_only <- tibble(gene = genes_to_show) %>%
-    crossing(tibble(phenotype = phenotypes_to_show)) %>% mutate(functional_group = functional_group_for_gene(gene))
-
-data_for_prediction_gene_only_BBSome <- data_for_prediction_gene_only %>% filter(functional_group_for_gene(gene) == "BBSome", gene != "BBS18")
-
-
-data_for_prediction_gene_source <- tibble(gene = genes_to_show, source = "new_source") %>%
-    crossing(tibble(phenotype = phenotypes_to_show)) %>% mutate(functional_group = functional_group_for_gene(gene))
-
-data_for_prediction_gene_source_BBSome <- data_for_prediction_gene_source %>% filter(functional_group_for_gene(gene) == "BBSome", gene != "BBS18")
-
-data_long_filter_lof <- data_long %>% filter(loss_of_function == "certain")
-
-data_for_prediction_gene_source_lof <- tibble(gene = genes_to_show, source = "new_source", loss_of_function_certain = 1) %>%
-    crossing(tibble(phenotype = phenotypes_to_show)) %>% mutate(functional_group = functional_group_for_gene(gene))
-
-plot_pairwise_differences(fit_gene_source_age_imputed, data_for_prediction_gene_source_BBSome %>% crossing(age_std_for_model = age_transform(c(10,30,50))))
-
-plot_pairwise_differences(fit_gene_source_age_sex_imputed, data_for_prediction_gene_source_BBSome %>% crossing(tibble(Sex = c("M","F"))) %>% crossing(age_std_for_model = age_transform(c(10,30,50))))
+# data_for_prediction_gene_only <- tibble(gene = genes_to_show) %>%
+#     crossing(tibble(phenotype = phenotypes_to_show)) %>% mutate(functional_group = functional_group_for_gene(gene))
+# 
+# data_for_prediction_gene_only_BBSome <- data_for_prediction_gene_only %>% filter(functional_group_for_gene(gene) == "BBSome", gene != "BBS18")
+# 
+# 
+# data_for_prediction_gene_source <- tibble(gene = genes_to_show, source = "new_source") %>%
+#     crossing(tibble(phenotype = phenotypes_to_show)) %>% mutate(functional_group = functional_group_for_gene(gene))
+# 
+# data_for_prediction_gene_source_BBSome <- data_for_prediction_gene_source %>% filter(functional_group_for_gene(gene) == "BBSome", gene != "BBS18")
+# 
+# data_long_filter_lof <- data_long %>% filter(loss_of_function == "certain")
+# 
+# data_for_prediction_gene_source_lof <- tibble(gene = genes_to_show, source = "new_source", loss_of_function_certain = 1) %>%
+#     crossing(tibble(phenotype = phenotypes_to_show)) %>% mutate(functional_group = functional_group_for_gene(gene))
+# 
+# plot_pairwise_differences(fit_gene_source_age_imputed, data_for_prediction_gene_source_BBSome %>% crossing(age_std_for_model = age_transform(c(10,30,50))))
+# 
+# plot_pairwise_differences(fit_gene_source_age_sex_imputed, data_for_prediction_gene_source_BBSome %>% crossing(tibble(Sex = c("M","F"))) %>% crossing(age_std_for_model = age_transform(c(10,30,50))))
 
 ```
 
 ```{r}
-
-
+# fit <- fit_base_model(models_base$gene_source_filtered_sex, data_long)
+# data_for_prediction <- data_for_prediction_base_model(models_base$gene_source_filtered_age, genes_to_show, phenotypes_to_show)
+# 
+# plot_gene_phenotype_differences_estimates(fit, data_for_prediction)
 ```
 
-adapt_delta = 0.95
 
 
 
+## Imputation with mice
 
-# Source + lof
+Including age or sex in the base models is problematic as it involves tossing out `r round(100 * mean(is.na(data$age)))`% or `r round(100 * mean(is.na(data$Sex)))`% of data respectively. This results in wide posterior intervals and weak inferences. To try to ameliorate this we also tested running models on datasets with age and sex imputed, using multiple imputation via the `mice` package. We assume that both age and sex can be realted to the functional group of the mutation and to each other. Involving further relations (e.g. individual genes) led to warnings from the `mice` package and we thus didn't use those.
+
+```{r mice_impute}
+set.seed(20181217)
+predictor_matrix <- matrix(0, nrow = 2, ncol = ncol(data))
+colnames(predictor_matrix) <- names(data)
+
+predictor_matrix[, c("functional_group")] <- 1
+predictor_matrix[1, c("Sex")] <- 1
+predictor_matrix[2, c("age_std_for_model")] <- 1
+
+mice_m = 5
+data_mice <- mice(data, m = mice_m, blocks = list("age_std_for_model", "Sex"), predictorMatrix = predictor_matrix)
+if(!is.null(data_mice$loggedEvents)) {
+  data_mice$loggedEvents %>% select(dep, meth, out) %>% distinct()
+}
+
+data_long_mice <- mice::complete(data_mice, "all") %>% map(data_long_from_data)
+```
+
+The models differ in the formulas used, but all use the default priors and do not filter the dataset in any way.
+
+## Fit the imputed models
+
+```{r fit_imputed_models}
+fits_imputed <- models_imputed %>% map(function(def) { fit_imputed_model(def, data_long_mice)})
+```
+
+
+# Between-study variability needs to be included
+
+# Between-study variability mostly explains age and sex differences
+
+# Between-study variability mostly explains loss-of-function differences
 
 TODO
 
@@ -119,49 +161,138 @@ lof_data_plot <- data_long %>%
 lof_data_plot
 ```
 
+# Robustness of conclusions to model choice
 
-# Imputation with mice
-
-It is hard to im
+Definovat min. klin. relevantni efekt
 
 ```{r}
-predictor_matrix <- matrix(0, nrow = 2, ncol = ncol(data))
-colnames(predictor_matrix) <- names(data)
+min_interesting_effect <- 2
+min_phenotypes_for_diffs <- 3
 
-#For 
+def <- models_base$gene_source
+fit <- fits_base[[def$name]]
+data_for_prediction <- data_for_prediction_base_model(def, genes_to_show, phenotypes_to_show)
 
-#predictor_matrix[, phenotypes_to_use] <- 1
-predictor_matrix[, c("functional_group")] <- 1
-predictor_matrix[1, c("Sex")] <- 1
-predictor_matrix[2, c("age_std_for_model")] <- 1
+data_for_prediction_bbsome <- data_for_prediction%>% filter(functional_group == "BBSome", gene != "BBS18")
 
-mice_m = 5
-data_mice <- mice(data, m = mice_m, blocks = list("age_std_for_model", "Sex"), predictorMatrix = predictor_matrix)
-if(!is.null(data_mice$loggedEvents)) {
-  data_mice$loggedEvents %>% select(dep, meth, out) %>% distinct()
+samples <- get_tidy_samples(fit, data_for_prediction)
+samples_diff <- get_samples_pairwise_diff(def, samples) %>% mutate(is_relevant = odds_ratio >= min_interesting_effect | odds_ratio <= 1 /min_interesting_effect)
+
+samples_diff_bbsome <- get_tidy_samples(fit, data_for_prediction_bbsome) %>% get_samples_pairwise_diff(def, .) %>% mutate(is_relevant = odds_ratio >= min_interesting_effect | odds_ratio <= 1 /min_interesting_effect)
+
+samples_prediction_bbsome = get_tidy_samples_prediction(fit, data_for_prediction_bbsome)
+```
+
+```{r}
+approximate_p_combination <- function(probabilities, min_positive) {
+  N_samples <- 10000
+  sample_matrix <- array(NA, c(length(probabilities), N_samples))
+  for(i in 1:length(probabilities)) {
+    sample_matrix[i,] <- rbernoulli(N_samples, probabilities[i])
+  }
+  sums <- colSums(sample_matrix)
+  if(length(sums) != N_samples) {
+    stop("error")
+  }
+  mean(sums >= min_positive)
 }
-
-data_long_mice <- mice::complete(data_mice, "all") %>% map(data_long_from_data)
 ```
 
-```{r}
-my_hist_func <- function(x) { ggplot(x, aes(x = age_std_for_model)) + geom_density(adjust = 2) + facet_wrap(~phenotype) + scale_y_continuous(limits = c(0,0.9)) }
-data_long_mice %>% map(my_hist_func)
-
-(data_long %>% filter(!is.na(age_std_for_model)) %>% my_hist_func) + ggtitle("Original")
-
-```
-
-```{r}
-models_imputed <- list(
-  gene_source_imputed_sex = list(formula = formula_gene_source_sex, priors = default_priors, components = c("gene", "source", "sex"), filter = c()),
-
-  gene_source_imputed_age = list(formula = formula_gene_source_age, priors = default_priors, components = c("gene", "source", "age"), filter = c()),
+*	The severity of BBS is worse in patients with LOF mutations than in patients with other mutations. 
+  * Nutno rozmyslet, co to znamená pro modely, které neberou LOF v potaz - asi lze vzít predikci napřič pacienty, to ale nedává moc smysl. Nebál bych se říct, že tohle nebude podpořeno.
+  * Measured as widest central posterior credible interval that excludes OR 1.
+*	The data suggest a difference between the severity of BBS in patients with mutations in different functional groups of genes.
+  * Measured as posterior probability, that there is clinically relevant effect for at least `r min_phenotypes_for_diffs` phenotypes for at least 2/3 of pairwise gene comparisons across at least one group pair.
   
-  gene_source_imputed_age_sex = list(formula = brmsformula(update.formula(formula_gene_source, ~ . + (0 + age_std_for_model||phenotype)), family = "bernoulli"), priors = default_priors, components = c("gene", "source", "age", "sex"), filter = c())
-)
+```{r}
+samples_diff %>% 
+  filter(functional_group.x > functional_group.y) %>%
+  group_by(sample, phenotype, functional_group.x, functional_group.y) %>%
+  summarise(enough_pairwise_relevant = mean(is_relevant) >= 2/3) %>%
+  group_by(sample, phenotype) %>%
+  summarise(enough_group_relevant = any(enough_pairwise_relevant)) %>%
+  group_by(sample) %>%
+  summarise(enough_phenotype_relevant = sum(enough_group_relevant) >= min_phenotypes_for_diffs) %>%
+  ungroup() %>%
+  summarise(functional_groups_differ = mean(enough_phenotype_relevant))
+```
+*	The data suggest a difference between the severity of BBS in patients with mutations in different BBSome subunits.
+  * Measured as posterior probability, that there is clinically relevant effect for at least `r min_phenotypes_for_diffs` phenotypes for at least 5 pairwise comparisons. 
+```{r}
+samples_diff_bbsome %>% 
+  filter(as.character(gene.x) > as.character(gene.y)) %>%
+  group_by(sample, phenotype) %>%
+  summarise(enough_pairwise_relevant = sum(is_relevant) >= 5) %>%
+  group_by(sample) %>%
+  summarise(enough_phenotype_relevant = sum(enough_pairwise_relevant) >= min_phenotypes_for_diffs)  %>%
+  ungroup() %>%
+  summarise(bbsome_genes_differ = mean(enough_phenotype_relevant))
 ```
 
+*	BBS4 and BBS5 share similar pattern of penetrance of symptoms.
+  * Očekávám, že nebude potvrzeno. 
+  * Probability that correlation in log-odds (the linear predictor) is > TODO:threshold.
+```{r}
+#TODO
+```
+*	BBS2 and BBS7 share similar pattern of penetrance of symptoms.
+*	BBS4 phenotype is the most severe of all BBSome subunits.
+  * Očekávám, že nebude potvrzeno (kvůli RD, OBE, PD)
+  * Probability that BBS4 has highest odds for all phenotypes
+  * Probability that a patient with BBS4 has >= #phenotypes than others.
+```{r}
+samples_diff_bbsome %>% 
+  filter(gene.x == "BBS04", gene.y != "BBS04") %>%
+  group_by(sample) %>%
+  summarise(bbs04_highest = all(odds_ratio >= 1 / min_interesting_effect)) %>%
+  summarise(bbs04_highest = mean(bbs04_highest))
+```
+```{r}
+samples_prediction_bbsome %>% 
+  group_by(sample, gene) %>%
+  summarise(num_phenotypes = sum(value)) %>%
+  group_by(sample) %>%
+  mutate(has_most_pheno = num_phenotypes == max(num_phenotypes)) %>%
+  ungroup() %>%
+  group_by(gene) %>%
+  #filter(gene == "BBS04") %>%
+  summarise(p_most_pheno = mean(has_most_pheno))
+```
+*	Mutations in different BBSome subunits predispose to different renal phenotype.
+  *  Measured as posterior probability, that there is clinically relevant effect for at least 5 pairwise comparisons. 
+*	There are no apparent differences in the penetrance of retinal dystrophy between functional groups of BBS genes.
+  * Očekávám, že nebude potvrzeno.
+  * Posterior probability that all pairwise differences are less the min. effect.
+*	There are no apparent differences in the penetrance of obesity between functional groups of BBS genes.
+  * Očekávám, že nebude potvrzeno.
+  * Stejně jako výše.
+*	Polydactyly is more frequent in BBS2 patients compared to BBS1 patients.
+  * Directly the probability that the OR > 1 (nebo OR > min. efekt)
+*	Cognitive impairment is less frequent in BBS3 patients compared to other patients (all canonical BBS genes).
+  * Tohle trochu dubluje tu diskuzi o func. groups
+  * Probability that all pairwise odds are less
+  * Probability that odds against a randomly selected gene are less
+*	Cognitive impairment is more frequent in BBS7 patients compared to other patients wirh mutations in BBSome subunits.
+  * Očekávám, že nebude potvrzeno
+*	Renal involvement is less frequent in BBS1, BBS4 and BBS8 patients compared to BBS2, BBS7, BBS9 patients.
+*	Renal involvment is less frequent in BBS1 patients compared to BBS2 patients.
+*	Renal involvment is less frequent in BBS1 patients compared to BBS10 patients.
+*	Liver involvment is less frequent in BBS1 patients compared to BBS2 patients.
+*	Liver involvment is less frequent in BBS1 patients compared to BBS10 patients.
+*	Patients with BBS2 mutations are more likely to have heart anomalies compared to patients with other BBSome mutations.
+*	Patients with BBS5 mutations are more likely to have liver anomalies compared to patients with other BBSome mutations.
+*	Patients with BBS4 mutations are less likely to have renal anomalies compared to patients with other BBSome mutations.
+
+
+
+```{r}
+```
+
+
+
+```{r}
+
+```
 
 
 ```{r}
