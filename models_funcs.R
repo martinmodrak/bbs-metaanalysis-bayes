@@ -1,3 +1,14 @@
+filter_data_by_model_def <- function(def, data_long) {
+  switch (def$filter,
+          "none" = data_long,
+          "lof" = data_long %>% filter(loss_of_function == "certain"),
+          "age" = data_long %>% filter(!is.na(age_std_for_model)),
+          "sex" = data_long %>% filter(!is.na(Sex)),
+          "age_sex" = data_long %>% filter(!is.na(age_std_for_model), !is.na(Sex)),
+          stop("Unrecognized filter")
+  )  
+}
+
 fit_base_model <- function(def, data_long) {
   if(is.null(def)) {
     stop("Invalid def")
@@ -12,14 +23,7 @@ fit_base_model <- function(def, data_long) {
     dir.create(here(stored_fits_dir))
   }
 
-  data <- switch (def$filter,
-    "none" = data_long,
-    "lof" = data_long %>% filter(loss_of_function == "certain"),
-    "age" = data_long %>% filter(!is.na(age_std_for_model)),
-    "sex" = data_long %>% filter(!is.na(Sex)),
-    "age_sex" = data_long %>% filter(!is.na(age_std_for_model), !is.na(Sex)),
-    stop("Unrecognized filter")
-  )
+  data <- filter_data_by_model_def(def, data_long)
   
   brm(formula = def$formula, data = data, prior = def$priors, file = here(stored_fits_dir,def$name),
       control = list(adapt_delta = 0.95))   
@@ -66,6 +70,10 @@ data_for_prediction_base_model <- function(def, genes_to_show, phenotypes_to_sho
   }
   
   result
+}
+
+filter_for_BBSome <- function(data_for_prediction) {
+  filter(data_for_prediction, functional_group == "BBSome", gene != "BBS18")
 }
 
 get_tidy_samples <- function(fit, data_for_prediction) {

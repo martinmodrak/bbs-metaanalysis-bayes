@@ -43,6 +43,8 @@ source(here("models.R"))
 source(here("models_funcs.R"))
 source(here("plots.R"))
 
+##PP Checks take time, so turn this off for quicker computation of the rest
+compute_pp_checks <- FALSE
 ```
 
 
@@ -133,6 +135,7 @@ The models differ in the formulas used, but all use the default priors and do no
 
 ```{r fit_imputed_models}
 fits_imputed <- models_imputed %>% map(function(def) { fit_imputed_model(def, data_long_mice)})
+all_fits <- c(fits_base, fits_imputed)
 ```
 
 
@@ -141,6 +144,66 @@ fits_imputed <- models_imputed %>% map(function(def) { fit_imputed_model(def, da
 # Between-study variability mostly explains age and sex differences
 
 # Between-study variability mostly explains loss-of-function differences
+
+## PP Check for LOF
+
+```{r}
+compare_pp_check <- function(model_names, pp_check_types) {
+  for(name in model_names) {
+    run_pp_checks(all_models[[name]], all_fits[[name]], data_long, types = pp_check_types)  
+  }
+} 
+```
+
+
+```{r, fig.width=8}
+models_to_compare = c("gene_source", "gene_source_lof", "gene_source_filtered_lof", "gene_lof")
+
+if(compute_pp_checks) {
+  compare_pp_check(models_to_compare, c("gene_lof"))
+}
+```
+
+First, let us note that the checks for `gene_source` and `gene_source_lof` are almost identical. So let us focus on the comparison between `gene_source` and `gene_source_filtered_lof`.
+
+What we see is that the `gene_source` model has trouble explaining some properties of unknown.BBS01, BBS02, unknown.BBS03, certain.BBS06 (just barely), certain.BBS07, certain.BBS08 (just barely), certain.BBS10, unknown.BBS12, certain.other.
+
+`gene_source_filtered_lof` only slightly improves over this some of the problematic genes became barely OK and others stayed the same (obviously it does not model the uncertain LOF data).
+
+`gene_lof` improves in certrain.BBS08 and certain.other while having problems with unknown.BBS09 (barely) and with slightly worse fit for unnknown.BBS03, unknown.BBS07.
+
+So while there improvements in fitting LOF differences per gene when including LOF in the model, they are not very strong.
+
+```{r}
+if(compute_pp_checks) {
+  compare_pp_check(models_to_compare, c("phenotype_lof"))
+}
+```
+
+Once again `gene_source` and `gene_source_lof` are almost identical. Overall the phenotype comparison is worse for the `gene_source` model as it has problems with OBE (barely), certain.CI (barely), REN, LIV, while `gene_source_filtered_lof` has no problems. `gene_lof` is similar to `gene_source` but improves for LIV.
+
+The substantial problems with fitting REN in `gene_source` are potentially troubling.
+
+This nevertheless indicates that there is some missing information in all fits.
+
+```{r, fig.width=8}
+if(compute_pp_checks) {
+  compare_pp_check(models_to_compare, c("source"))
+}
+```
+
+`gene_source` and `gene_source_lof` are once again almost identical.
+
+The comparison between `gene_source` and `gene_lof` is not clear as for sources there is improvement in one and for some in the other.
+
+`gene_source_filtered_lof` removes some of the issues in `gene_source` (e.g. Scheidecker et al. 2013), but retains others (Chaki et al., Schaefer et al. 2011 (a), Schaefer et al. 2016.).
+
+Once again there is a minor advantage in filtering out LOF data.
+
+```{r, fig.width=10, fig.height=7}
+plot_pairwise_differences(models_base$gene_source_filtered_lof, fits_base$gene_source_filtered_lof, data_for_prediction_base_model(models_base$gene_source_filtered_lof, genes_to_show, phenotypes_to_show) %>% filter_for_BBSome())
+```
+
 
 TODO
 
@@ -168,12 +231,13 @@ Definovat min. klin. relevantni efekt
 ```{r}
 min_interesting_effect <- 2
 min_phenotypes_for_diffs <- 3
+min_bbsome_pairwise_for_diffs <- 5
 
 def <- models_base$gene_source
 fit <- fits_base[[def$name]]
 data_for_prediction <- data_for_prediction_base_model(def, genes_to_show, phenotypes_to_show)
 
-data_for_prediction_bbsome <- data_for_prediction%>% filter(functional_group == "BBSome", gene != "BBS18")
+data_for_prediction_bbsome <- data_for_prediction %>% filter_for_BBSome()
 
 samples <- get_tidy_samples(fit, data_for_prediction)
 samples_diff <- get_samples_pairwise_diff(def, samples) %>% mutate(is_relevant = odds_ratio >= min_interesting_effect | odds_ratio <= 1 /min_interesting_effect)
@@ -217,12 +281,12 @@ samples_diff %>%
   summarise(functional_groups_differ = mean(enough_phenotype_relevant))
 ```
 *	The data suggest a difference between the severity of BBS in patients with mutations in different BBSome subunits.
-  * Measured as posterior probability, that there is clinically relevant effect for at least `r min_phenotypes_for_diffs` phenotypes for at least 5 pairwise comparisons. 
+  * Measured as posterior probability, that there is clinically relevant effect for at least `r min_phenotypes_for_diffs` phenotypes for at least `r min_bbsome_pairwise_for_diffs` pairwise comparisons. 
 ```{r}
 samples_diff_bbsome %>% 
   filter(as.character(gene.x) > as.character(gene.y)) %>%
   group_by(sample, phenotype) %>%
-  summarise(enough_pairwise_relevant = sum(is_relevant) >= 5) %>%
+  summarise(enough_pairwise_relevant = sum(is_relevant) >= min_bbsome_pairwise_for_diffs) %>%
   group_by(sample) %>%
   summarise(enough_phenotype_relevant = sum(enough_pairwise_relevant) >= min_phenotypes_for_diffs)  %>%
   ungroup() %>%
@@ -255,26 +319,102 @@ samples_prediction_bbsome %>%
   mutate(has_most_pheno = num_phenotypes == max(num_phenotypes)) %>%
   ungroup() %>%
   group_by(gene) %>%
-  #filter(gene == "BBS04") %>%
+  filter(gene == "BBS04") %>%
   summarise(p_most_pheno = mean(has_most_pheno))
 ```
 *	Mutations in different BBSome subunits predispose to different renal phenotype.
-  *  Measured as posterior probability, that there is clinically relevant effect for at least 5 pairwise comparisons. 
+  *  Measured as posterior probability, that there is clinically relevant effect for at least `r min_bbsome_pairwise_for_diffs` pairwise comparisons. 
+```{r}
+samples_diff_bbsome %>% 
+  filter(phenotype == "REN", as.character(gene.x) > as.character(gene.y)) %>%
+  group_by(sample) %>%
+  summarise(enough_pairwise_relevant = sum(is_relevant) >= min_bbsome_pairwise_for_diffs) %>%
+  ungroup() %>%
+  summarise(REN_bbsome_genes_differ = mean(enough_pairwise_relevant))
+```
+  
 *	There are no apparent differences in the penetrance of retinal dystrophy between functional groups of BBS genes.
   * Očekávám, že nebude potvrzeno.
   * Posterior probability that all pairwise differences are less the min. effect.
+```{r}
+compute_prob_bbsome_diff_irrelevant <- function(phenotype_name) { 
+  target_column_name = paste0(phenotype_name," no difference")
+  samples_diff_bbsome %>% 
+    filter(phenotype == phenotype_name, as.character(gene.x) > as.character(gene.y)) %>%
+    group_by(sample) %>%
+    summarise(all_irrelevant = all(!is_relevant)) %>%
+    ungroup() %>%
+    summarise(!!target_column_name := mean(all_irrelevant)) 
+}
+
+compute_prob_bbsome_diff_irrelevant("OBE")
+```  
 *	There are no apparent differences in the penetrance of obesity between functional groups of BBS genes.
   * Očekávám, že nebude potvrzeno.
   * Stejně jako výše.
+```{r}
+compute_prob_bbsome_diff_irrelevant("RD")
+```
+  
 *	Polydactyly is more frequent in BBS2 patients compared to BBS1 patients.
   * Directly the probability that the OR > 1 (nebo OR > min. efekt)
+```{r}
+compute_prob_pairwise_diff <- function(phenotype_name, gene_more_frequent, gene_less_frequent) {
+ target_column_name = paste(phenotype_name, gene_more_frequent, "more likely than", gene_less_frequent)
+  samples_diff %>% 
+    filter(phenotype == phenotype_name, gene.x == gene_more_frequent, gene.y == gene_less_frequent) %>%
+    group_by(sample) %>%
+    summarise(all_higher = all(odds_ratio >= 1)) %>%
+    ungroup() %>%
+    summarise(!!target_column_name := mean(all_higher))   
+}
+
+compute_prob_pairwise_diff("PD","BBS02","BBS01")
+```
+
 *	Cognitive impairment is less frequent in BBS3 patients compared to other patients (all canonical BBS genes).
   * Tohle trochu dubluje tu diskuzi o func. groups
   * Probability that all pairwise odds are less
   * Probability that odds against a randomly selected gene are less
+```{r}
+compute_prob_group_diff_all <- function(phenotype_name, group1, group2, group1_name = paste0(group1, collapse = "_"),group2_name = paste0(group2, collapse = "_")) {
+  target_column_name = paste(phenotype_name,"all",group1_name,"more likely than", group2_name)
+  samples_diff %>% 
+    filter(phenotype == phenotype_name, gene.x %in% group1, gene.y %in% group2) %>%
+    group_by(sample) %>%
+    summarise(all_higher = all(odds_ratio >= 1)) %>%
+    ungroup() %>%
+    summarise(!!target_column_name := mean(all_higher))   
+}
+
+compute_prob_group_diff_random <- function(phenotype_name, group1, group2, group1_name = paste0(group1, collapse = "_"),group2_name = paste0(group2, collapse = "_")) {
+  target_column_name = paste(phenotype_name,"random",group1_name,"more likely than", group2_name)
+  samples_diff %>% 
+    filter(phenotype == phenotype_name, gene.x %in% group1, gene.y %in% group2) %>%
+    group_by(sample) %>%
+    summarise(random_higher = sample(odds_ratio, size = 1) >= 1) %>%
+    ungroup() %>%
+    summarise(!!target_column_name := mean(random_higher))   
+}
+
+compute_prob_group_diff_all("CI", paste0("BBS0", c(1,2,4,5,7,8,9)), "BBS03", group1_name = "BBSome")
+compute_prob_group_diff_random("CI", paste0("BBS0", c(1,2,4,5,7,8,9)), "BBS03", group1_name = "BBSome")
+```
+
 *	Cognitive impairment is more frequent in BBS7 patients compared to other patients wirh mutations in BBSome subunits.
   * Očekávám, že nebude potvrzeno
+```{r}
+compute_prob_group_diff_all("CI", "BBS07", paste0("BBS0", c(1,2,4,5,8,9)), group2_name = "others")
+compute_prob_group_diff_random("CI", "BBS07", paste0("BBS0", c(1,2,4,5,8,9)), group2_name = "others")
+
+```
+
 *	Renal involvement is less frequent in BBS1, BBS4 and BBS8 patients compared to BBS2, BBS7, BBS9 patients.
+```{r}
+compute_prob_group_diff_all("REN", paste0("BBS0", c(2,7,9)), paste0("BBS0", c(1,4,8)))
+compute_prob_group_diff_random("REN", paste0("BBS0", c(2,7,9)), paste0("BBS0", c(1,4,8)))
+```
+
 *	Renal involvment is less frequent in BBS1 patients compared to BBS2 patients.
 *	Renal involvment is less frequent in BBS1 patients compared to BBS10 patients.
 *	Liver involvment is less frequent in BBS1 patients compared to BBS2 patients.

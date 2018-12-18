@@ -11,26 +11,33 @@ base_theme <- theme(
 
 scale_color_functional_group <- scale_color_manual(values = c(BBS03 = "#f8766dff", BBSome = "#5f8dd3ff", Chaperonins = "#aa8800ff"))
 
+bbs_labeller <- function(x) {
+  gsub("BBS0","BBS", as.character(x), fixed = TRUE)
+}
+
+bbs_labeller_facet <- labeller(gene = bbs_labeller)
+
+
 my_ppc <- function(fun, ...) {
   fun(..., prob = posterior_interval, fatten = 1.5, freq = FALSE)
 }
 
 my_ppc_bars <- function(...) {
-  my_ppc(ppc_bars, ...)
+  my_ppc(ppc_bars, ...) + theme(axis.text = element_blank())
 }
 
 my_ppc_bars_grouped <- function(...) {
-  my_ppc(ppc_bars_grouped, ...)
+  my_ppc(ppc_bars_grouped, ...) + theme(axis.text = element_blank())
 }
 
-run_pp_checks <- function(fit, data_long, 
+run_pp_checks <- function(model_def, fit, data_long, 
                           types = c("overall","gene","phenotype","functional_group","functional_group_phenotype",
                                     "sex", "sex_phenotype","age","age_phenotype", "gene_lof", "phenotype_lof"), 
                           prediction_filter = NULL,
                           out_func = print) {
   
   predicted <- posterior_predict(fit, nsamples = 1000)
-  data <- data_long
+  data <- filter_data_by_model_def(model_def, data_long)
   
   if(!is.null(prediction_filter)) {
     predicted <- predicted[,prediction_filter] 
@@ -39,56 +46,63 @@ run_pp_checks <- function(fit, data_long,
 
   observed <- data$phenotype_value
   
+  gene_groups = if_else(data$functional_group != "Others" & data$gene != "BBS18", as.character(data$gene), "other")
+  
+  small_labels <- theme(strip.text = element_text(size = 6))
+  
+  
   if("overall" %in% types) {
-    my_ppc_bars(data$phenotype_value, predicted) %>% out_func
+    (my_ppc_bars(data$phenotype_value, predicted) + ggtitle(paste0("PPCheck overall for ", model_def$name))) %>% out_func
   }
   if("gene" %in% types) {
-    my_ppc_bars_grouped(data$phenotype_value, predicted, group = data$gene) %>% out_func
+    (my_ppc_bars_grouped(data$phenotype_value, predicted, group = data$gene) + ggtitle(paste0("PPCheck gene for ", model_def$name))) %>% out_func
   }
   if("source" %in% types) {
-    my_ppc_bars_grouped(data$phenotype_value, predicted, group = data$source) %>% out_func
+    (my_ppc_bars_grouped(data$phenotype_value, predicted, group = data$source) + 
+       ggtitle(paste0("PPCheck source for ", model_def$name)) +
+       small_labels
+     ) %>% out_func
   }
   if("gene_lof" %in% types) {
-    my_ppc_bars_grouped(data$phenotype_value, predicted, group = interaction(data$loss_of_function, data$gene)) %>% out_func
+    (my_ppc_bars_grouped(data$phenotype_value, predicted, group = interaction(data$loss_of_function, gene_groups)) + ggtitle(paste0("PPCheck gene_lof for ", model_def$name))) %>% out_func
   }
   if("phenotype" %in% types) {
-    my_ppc_bars_grouped(data$phenotype_value, predicted, group = data$phenotype) %>% out_func
+    (my_ppc_bars_grouped(data$phenotype_value, predicted, group = data$phenotype) + ggtitle(paste0("PPCheck phenotype for ", model_def$name))) %>% out_func
   }
   if("phenotype_lof" %in% types) {
-    my_ppc_bars_grouped(data$phenotype_value, predicted, group = interaction(data$loss_of_function, data$phenotype)) %>% out_func
+    (my_ppc_bars_grouped(data$phenotype_value, predicted, group = interaction(data$loss_of_function, data$phenotype)) + ggtitle(paste0("PPCheck phenotype + LOF for ", model_def$name))) %>% out_func
   }
   
   
   if("functional_group" %in% types) {
-    my_ppc_bars_grouped(observed, predicted, group = data$functional_group) %>% out_func
+    (my_ppc_bars_grouped(observed, predicted, group = data$functional_group) + ggtitle(paste0("PPCheck functional group for ", model_def$name))) %>% out_func
   }
   
   if("functional_group_phenotype" %in% types) {
-    my_ppc_bars_grouped(observed, predicted, group = interaction(data$functional_group, data$phenotype)) %>% out_func
+    (my_ppc_bars_grouped(observed, predicted, group = interaction(data$functional_group, data$phenotype)) + ggtitle(paste0("PPCheck group + phenotype for ", model_def$name))) %>% out_func
   }
   
   sex_fct <- factor(if_else(is.na(data$Sex), "NA", as.character(data$Sex)))
   if("sex" %in% types) {
-    my_ppc_bars_grouped(observed, predicted, group = sex_fct) %>% out_func
+    (my_ppc_bars_grouped(observed, predicted, group = sex_fct) + ggtitle(paste0("PPCheck sex for ", model_def$name))) %>% out_func
   }
   
   if("sex_phenotype" %in% types) {
-    my_ppc_bars_grouped(observed, predicted, group = interaction(sex_fct, data$phenotype)) %>% out_func
+    (my_ppc_bars_grouped(observed, predicted, group = interaction(sex_fct, data$phenotype)) + ggtitle(paste0("PPCheck sex + phenotype for ", model_def$name))) %>% out_func
   }
   
   
   age_fct <- factor(if_else(is.na(data$age_group), "NA", as.character(data$age_group)))
   if("age" %in% types) {
-    my_ppc_bars_grouped(observed, predicted, group = age_fct) %>% out_func
+    (my_ppc_bars_grouped(observed, predicted, group = age_fct) + ggtitle(paste0("PPCheck age for ", model_def$name))) %>% out_func
   }
   
   if("age_phenotype" %in% types) {
-    my_ppc_bars_grouped(observed, predicted, group = interaction(age_fct, data$phenotype)) %>% out_func
+    (my_ppc_bars_grouped(observed, predicted, group = interaction(age_fct, data$phenotype)) + ggtitle(paste0("PPCheck age + phenotype for ", model_def$name))) %>% out_func
   }
 
-  gene_groups = if_else(data$functional_group == "BBSome" & data$gene != "BBS18", as.character(data$gene), "other")
   if("gene_phenotype" %in% types) {
-    my_ppc_bars_grouped(observed, predicted, group = interaction(gene_groups, data$phenotype)) %>% out_func
+    (my_ppc_bars_grouped(observed, predicted, group = interaction(gene_groups, data$phenotype)) + ggtitle(paste0("PPCheck gene + phenotype for ", model_def$name))) %>% out_func
   }
   
 }
@@ -143,9 +157,7 @@ plot_gene_phenotype_differences_estimates <- function(fit, data_for_prediction, 
               upper50 = quantile(relative, 0.75)
     )
 
-  min_OR_to_certainly_include <- 0.1
-  max_OR_to_certainly_include <- 10
-  
+
   if(is.null(data_original)) {
     original_geom = NULL 
     limits_geom = NULL
@@ -189,8 +201,8 @@ plot_gene_phenotype_differences_estimates <- function(fit, data_for_prediction, 
     
     phenotype_limits <- phenotype_limits_points %>%
       inner_join(phenotype_limits_intervals, by = c("phenotype" = "phenotype")) %>%
-      mutate(min_or = pmin(min_or_intervals, min_or_points, min_OR_to_certainly_include), 
-             max_or = pmax(max_or_intervals, max_or_points, max_OR_to_certainly_include),
+      mutate(min_or = pmin(min_or_intervals, min_or_points), 
+             max_or = pmax(max_or_intervals, max_or_points),
              limits_ratio = max_or / min_or
              )
     
@@ -235,10 +247,9 @@ plot_gene_phenotype_differences_estimates <- function(fit, data_for_prediction, 
     facet_wrap(~phenotype, scales = "free_y", ncol = 4)  + 
     scale_color_functional_group +
     scale_y_log10("Odds ratio", labels = simple_num_format) +
-    scale_x_discrete(group_title) +
+    scale_x_discrete(group_title, labels = bbs_labeller) +
     scale_alpha_continuous(range = c(0.1,0.6)) +
     scale_size_continuous(range = c(0.5,3)) +
-    expand_limits(y = c(min_OR_to_certainly_include, max_OR_to_certainly_include)) +
     theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5)) +
     base_theme +
     guides(color = FALSE, size = FALSE, alpha = FALSE)
@@ -325,6 +336,8 @@ plot_pairwise_differences <- function(model_def, fit, data_for_prediction,
                            low = "#ca0020", mid = "#f7f7f7", high = "#0571b0") +
       base_theme +
       theme_heatmap +
+      scale_x_discrete(labels = bbs_labeller) +
+      scale_y_discrete(labels = bbs_labeller) +
       facet_wrap(~phenotype, ncol = 4) +
       ggtitle(paste0("Widest credible interval excluding 0", title_add))
     out_func(paste0("heatmap_ci_excl", title_add), p)
@@ -341,6 +354,8 @@ plot_pairwise_differences <- function(model_def, fit, data_for_prediction,
         expand_limits(fill = c( c(0.5,1,2))) +
         base_theme +
         theme_heatmap +
+        scale_x_discrete(labels = bbs_labeller) +
+        scale_y_discrete(labels = bbs_labeller) +
         facet_wrap(~phenotype, ncol = 4) +
       ggtitle(paste0("Odds ratio, 95% conservative", title_add))
     out_func(paste0("heatmap_min", title_add), p)
@@ -356,6 +371,8 @@ plot_pairwise_differences <- function(model_def, fit, data_for_prediction,
       scale_fill_distiller("     ", palette = "Spectral", trans = "log10") +
       base_theme +
       theme_heatmap +
+      scale_x_discrete(labels = bbs_labeller) +
+      scale_y_discrete(labels = bbs_labeller) +
       facet_wrap(~phenotype, ncol = 4)+
       ggtitle(paste0("Odds ratio, 95% extreme", title_add))
     out_func(paste0("heatmap_max", title_add), p)
@@ -402,7 +419,8 @@ plot_pairwise_differences <- function(model_def, fit, data_for_prediction,
         geom_segment(aes(x = lower50, xend = upper50, y = gene.y, yend = gene.y), size = 2) +
         scale_linerange +
         scale_linerange_color +
-        facet_grid(phenotype ~ gene.x)  +
+        scale_y_discrete(labels = bbs_labeller) +
+        facet_grid(phenotype ~ gene.x, labeller = labeller(gene.x = bbs_labeller))  +
         base_theme +
         theme_linerange_all +
         ggtitle(paste0("95% and 50% credible intervals for pairwise odds ratios", title_add))
@@ -418,7 +436,7 @@ plot_pairwise_differences <- function(model_def, fit, data_for_prediction,
       geom_segment(aes(x = lower50, xend = upper50), size = 2) +
       scale_linerange +
       scale_linerange_color +
-      facet_grid(gene.x ~ gene.y) +
+      facet_grid(gene.x ~ gene.y, labeller = labeller(gene.x = bbs_labeller, gene.y = bbs_labeller)) +
       theme_linerange_all  +
       base_theme +
       ggtitle(paste0("95% and 50% credible intervals for pairwise differences", title_add))
@@ -462,7 +480,7 @@ plot_lof_differences_estimates <- function(fit, data_for_prediction, genes_to_sh
     facet_wrap(~phenotype, scales = "free_y", ncol = 4)  + 
     scale_color_functional_group +
     scale_y_log10("Odds ratio", labels = simple_num_format) +
-    scale_x_discrete(group_title) +
+    scale_x_discrete(group_title, labels = bbs_labeller) +
     scale_alpha_continuous(range = c(0.1,0.6)) +
     scale_size_continuous(range = c(0.5,3)) +
     base_theme +

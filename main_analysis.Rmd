@@ -20,6 +20,7 @@ library(tidybayes)
 library(bayesplot)
 library(cowplot)
 library(knitr)
+library(svglite)
 
 
 source(here("data_processing.R"))
@@ -43,8 +44,8 @@ This is a supplement for the paper XXXX.
 
 TODO:
 - hlavni analyza bude bez LOF (v supplementu vysvětlit, proč je horší - horší vzájemný fit)
-
-
+- přidat i gene_source_filtered_lof
+- číslovat obrázky
 
 This document describes the Bayesian analysis reported in the main manuscript. A separate supplementary file (TODO add ID of the file) describes the multiverse analysis where we test how the results change with different modelling assumptions. All references to "multiverse analysis" in this text point to this document.
 
@@ -74,7 +75,7 @@ And here are the counts of individual mutations as observed in the data:
 data %>% group_by(gene) %>% summarise(count = length(gene)) %>% kable()
 ```
 
-While we include all of the genes in our computational model, we will mostly show only the most frequent mutations in the results here, those include BBS01 through BBS10 and BBS12.
+While we include all of the genes in our computational model, we will mostly show only the most frequent mutations in the results here, those include BBS1 through BBS10 and BBS12.
 
 ```{r}
 genes_to_show <- genes_to_show_from_data(data)
@@ -98,6 +99,7 @@ data_long %>%
   ggplot(aes(x = gene, y = proportion, size = n_patients, color = gene)) +
   geom_jitter(alpha = 0.3, height = 0, width = 0.3) +
   facet_wrap(~phenotype, ncol = 4) +
+  scale_x_discrete(labels = bbs_labeller) + 
   scale_y_continuous("Proportion of phenotype") +
   scale_size_continuous(range = c(0.5,4)) +
   guides(color = FALSE) +
@@ -111,7 +113,7 @@ Here, every point represents the proportion of patients with a given mutation th
 The most problematic missing data problem is the missingness in phenotype data. There are two distinct sources of missingness: a) a study missing the phenotype value for only some patients or b) a study not reporting the status of the phenotype for any patient. 
 Our analysis assumes the phenotype data to be missing at random, i.e. that the decision to not report a given phenotype in a study and missingness for individual patients is independent of the prevalence of the phenotype in the study population. This is probably not true for missingness at the study level, as investigators are plausibly more likely to report more prevalent phenotypes and more likely to ignore phenotype that was not observed in any patient. Similarly, if data for a specific patient omits a given phenotype (the state of the phenotype is reported as missing data in the original study), it is more likely the phenotype was not present. 
 
-However, in our analysis we were unable to find a good way to account for this phenomenon. But since we focus on comparison of individual phenotype prevalence across different mutations within a single study and do not compare phenotypes against each other, this should only be a significant issue if the rate of missingness in phenotype values is correlated with the prevalence of individual mutations present in a study (e.g. if studies with high obesity missingness would also tend to have overabundance of mutations in BBS03). Let's check whether this is the case:
+However, in our analysis we were unable to find a good way to account for this phenomenon. But since we focus on comparison of individual phenotype prevalence across different mutations within a single study and do not compare phenotypes against each other, this should only be a significant issue if the rate of missingness in phenotype values is correlated with the prevalence of individual mutations present in a study (e.g. if studies with high obesity missingness would also tend to have overabundance of mutations in BBS3). Let's check whether this is the case:
 
 ```{r}
 phenotype_stats <- data_long %>% 
@@ -125,12 +127,12 @@ data_long %>%
   summarise(n_mutations = length(unique(ID))) %>%
   inner_join(phenotype_stats, by = c("source" = "source")) %>%
   mutate(mutation_prevalence = n_mutations / n_patients) %>%
-  filter(functional_group %in% c("BBSome","BBS03"), gene != "BBS18" ) %>%
+  filter(functional_group %in% c("BBSome","BBS3"), gene != "BBS18" ) %>%
   ggplot(aes(x = avg_n_pheno, y = mutation_prevalence, size = n_patients, weight = n_patients)) + 
   geom_smooth(method = "glm", method.args = list(family = "binomial")) +
   geom_jitter(alpha = 0.3) +
   guides(size = guide_legend(override.aes = list(alpha = 1))) +
-  facet_wrap(~gene, scales = "free", nrow = 2 )
+  facet_wrap(~gene, scales = "free", nrow = 2, labeller = bbs_labeller_facet )
 ```
 
 In the figure above, each dot is a single study and shows the average number of phenotypes reported per patient vs. the prevalence of mutations in individual genes. Point size corresponds to the number of patients in a given study. Looking at the figure, a strong association of missingness to specific mutations seems implausible, but we can't completely rule out that it biases our results. This is a limitation of our approach and should be taken into account when interpreting our conclusions.
@@ -381,7 +383,7 @@ img_path = here("tmp_pics")
 if(!dir.exists(img_path)) {
   dir.create(img_path)
 }
-types = c(".eps",".png")
+types = c(".svg", ".png")
 
 for(type in types) {
   differences_func_group_plot %>% ggsave(paste0("functional_groups", type), plot = ., path = img_path,height = std_height, width = 5)
@@ -402,7 +404,7 @@ for(type in types) {
 
 # Extra inspection of the LIV phenotype
 
-For the LIV phenotype the frequentist analysis disagrees with the Bayesian analysis presented here (TODO: check that the final paper says that). In particular, the frequentist analysis shows BBS03 as lest likely to result in LIV and Chaperonins as most likely, while the analysis shown here reports exactly opposite trend. First let's look at aggregate frequencies of LIV phenotype:
+For the LIV phenotype the frequentist analysis disagrees with the Bayesian analysis presented here (TODO: check that the final paper says that). In particular, the frequentist analysis shows BBS3 as lest likely to result in LIV and Chaperonins as most likely, while the analysis shown here reports exactly opposite trend. First let's look at aggregate frequencies of LIV phenotype:
 
 ```{r}
 data_long %>% filter(phenotype == "LIV") %>% group_by(functional_group) %>%
@@ -431,21 +433,21 @@ for(type in ".png") {
 
 In the plot above, each dot is the proportion of patients with LIV given a mutation in a gene from one of the functional groups in a single study. Lines connect values that are from the same study (note that only one study had mutations from all groups and many had mutations in just one group) - those also have the same color. Size of the points represents the number of patients. We added some jitter to let us differentiate the points - notably all the points near zero and one are actually exactly zero and one.
 
-This plot tells a different story: most individual studies, especially those with larger number of cases show increase in LIV phenotype for BBSome against Chaperonins. There is only one larger study including both BBS03 and BBSome and it has more LIV positive cases for BBS03. The overall opposite trend is driven by a) the only larger studies reporting BBS03 having unusually low proportion of LIV in general and b) studies reporting mutations only for BBS03 or only for BBSome having unusually low proportion of LIV. 
+This plot tells a different story: most individual studies, especially those with larger number of cases show increase in LIV phenotype for BBSome against Chaperonins. There is only one larger study including both BBS3 and BBSome and it has more LIV positive cases for BBS3. The overall opposite trend is driven by a) the only larger studies reporting BBS3 having unusually low proportion of LIV in general and b) studies reporting mutations only for BBS3 or only for BBSome having unusually low proportion of LIV. 
 
 It however seems that the evidence in this direction is not very compelling.
 
-For a complete picture, let's look at pairwise differences between the 3 most common BBSome mutations (BBS01, BBS02 and BBS04), BBS03 and the Chaperonins (BBS06, BBS10, BBS12). 
+For a complete picture, let's look at pairwise differences between the 3 most common BBSome mutations (BBS1, BBS2 and BBS4), BBS3 and the Chaperonins (BBS6, BBS10, BBS12). 
 
 ```{r, fig.width=10, fig.height=7}
-data_for_prediction_LIV <- tibble(gene = c("BBS01", "BBS02", "BBS04", "BBS03", "BBS06", "BBS10", "BBS12"), source = "new_source", loss_of_function_certain = 1) %>%
+data_for_prediction_LIV <- tibble(gene = c("BBS1", "BBS2", "BBS4", "BBS3", "BBS6", "BBS10", "BBS12"), source = "new_source", loss_of_function_certain = 1) %>%
     crossing(tibble(phenotype = phenotypes_to_show))
 
 plot_pairwise_differences(main_model_def, fit, data_for_prediction_LIV, plot_types = "linerange_all")
 
 ```
 
-We see that for the LIV phenotype there is large uncertainty and all 95% intervals include one. We also see that the large differences we've seen in the summary plots for CI and REN do translate into a quite confident estimates of notable pairwise differences between most BBSome genes, BBS03 and Chaperonins.
+We see that for the LIV phenotype there is large uncertainty and all 95% intervals include one. We also see that the large differences we've seen in the summary plots for CI and REN do translate into a quite confident estimates of notable pairwise differences between most BBSome genes, BBS3 and Chaperonins.
 
 # Original computing environment
 
