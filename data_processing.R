@@ -17,6 +17,13 @@ functional_group_for_gene <- function(gene) {
   )
 }
 
+age_transform_from_age <- function(age) {
+  mean_age <- mean(age, na.rm=TRUE)
+  sd_age <- sd(age, na.rm = TRUE)  
+  function(x) {
+    (x - mean_age)/ sd_age
+  }
+}
 
 read_main_data <- function() {
   
@@ -73,7 +80,7 @@ read_main_data <- function() {
                age_corr == "50-59" ~ 55,
                age_corr == "60+" ~ 70
              ),
-           age_std_for_model = (age_numbers_groups_guessed - mean(age_numbers_groups_guessed, na.rm=TRUE))/ sd(age_numbers_groups_guessed, na.rm = TRUE)
+           age_std_for_model = age_transform_from_age(age_numbers_groups_guessed)(age_numbers_groups_guessed)
     ) %>%
     
     

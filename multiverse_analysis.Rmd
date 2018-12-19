@@ -233,34 +233,10 @@ min_interesting_effect <- 2
 min_phenotypes_for_diffs <- 3
 min_bbsome_pairwise_for_diffs <- 5
 
-def <- models_base$gene_source
-fit <- fits_base[[def$name]]
-data_for_prediction <- data_for_prediction_base_model(def, genes_to_show, phenotypes_to_show)
-
-data_for_prediction_bbsome <- data_for_prediction %>% filter_for_BBSome()
-
-samples <- get_tidy_samples(fit, data_for_prediction)
-samples_diff <- get_samples_pairwise_diff(def, samples) %>% mutate(is_relevant = odds_ratio >= min_interesting_effect | odds_ratio <= 1 /min_interesting_effect)
-
-samples_diff_bbsome <- get_tidy_samples(fit, data_for_prediction_bbsome) %>% get_samples_pairwise_diff(def, .) %>% mutate(is_relevant = odds_ratio >= min_interesting_effect | odds_ratio <= 1 /min_interesting_effect)
-
-samples_prediction_bbsome = get_tidy_samples_prediction(fit, data_for_prediction_bbsome)
+evaluators <- list()
 ```
 
-```{r}
-approximate_p_combination <- function(probabilities, min_positive) {
-  N_samples <- 10000
-  sample_matrix <- array(NA, c(length(probabilities), N_samples))
-  for(i in 1:length(probabilities)) {
-    sample_matrix[i,] <- rbernoulli(N_samples, probabilities[i])
-  }
-  sums <- colSums(sample_matrix)
-  if(length(sums) != N_samples) {
-    stop("error")
-  }
-  mean(sums >= min_positive)
-}
-```
+
 
 *	The severity of BBS is worse in patients with LOF mutations than in patients with other mutations. 
   * Nutno rozmyslet, co to znamená pro modely, které neberou LOF v potaz - asi lze vzít predikci napřič pacienty, to ale nedává moc smysl. Nebál bych se říct, že tohle nebude podpořeno.
@@ -269,20 +245,23 @@ approximate_p_combination <- function(probabilities, min_positive) {
   * Measured as posterior probability, that there is clinically relevant effect for at least `r min_phenotypes_for_diffs` phenotypes for at least 2/3 of pairwise gene comparisons across at least one group pair.
   
 ```{r}
-samples_diff %>% 
-  filter(functional_group.x > functional_group.y) %>%
-  group_by(sample, phenotype, functional_group.x, functional_group.y) %>%
-  summarise(enough_pairwise_relevant = mean(is_relevant) >= 2/3) %>%
-  group_by(sample, phenotype) %>%
-  summarise(enough_group_relevant = any(enough_pairwise_relevant)) %>%
-  group_by(sample) %>%
-  summarise(enough_phenotype_relevant = sum(enough_group_relevant) >= min_phenotypes_for_diffs) %>%
-  ungroup() %>%
-  summarise(functional_groups_differ = mean(enough_phenotype_relevant))
+evaluators[["functional_groups_differ"]] <- function(samples_diff, samples_diff_bbsome, samples_prediction_bbsome, samples_linear_bbsome) {
+  samples_diff %>% 
+    filter(functional_group.x > functional_group.y) %>%
+    group_by(sample, phenotype, functional_group.x, functional_group.y) %>%
+    summarise(enough_pairwise_relevant = mean(is_relevant) >= 2/3) %>%
+    group_by(sample, phenotype) %>%
+    summarise(enough_group_relevant = any(enough_pairwise_relevant)) %>%
+    group_by(sample) %>%
+    summarise(enough_phenotype_relevant = sum(enough_group_relevant) >= min_phenotypes_for_diffs) %>%
+    ungroup() %>%
+    summarise(`Functional groups differ` = mean(enough_phenotype_relevant))
+}
 ```
 *	The data suggest a difference between the severity of BBS in patients with mutations in different BBSome subunits.
   * Measured as posterior probability, that there is clinically relevant effect for at least `r min_phenotypes_for_diffs` phenotypes for at least `r min_bbsome_pairwise_for_diffs` pairwise comparisons. 
 ```{r}
+evaluators[["bbsome_genes_differ"]] <- function(samples_diff, samples_diff_bbsome, samples_prediction_bbsome, samples_linear_bbsome) {
 samples_diff_bbsome %>% 
   filter(as.character(gene.x) > as.character(gene.y)) %>%
   group_by(sample, phenotype) %>%
@@ -290,14 +269,23 @@ samples_diff_bbsome %>%
   group_by(sample) %>%
   summarise(enough_phenotype_relevant = sum(enough_pairwise_relevant) >= min_phenotypes_for_diffs)  %>%
   ungroup() %>%
-  summarise(bbsome_genes_differ = mean(enough_phenotype_relevant))
+  summarise(`BBSome genes differ` = mean(enough_phenotype_relevant))
+}
 ```
 
 *	BBS4 and BBS5 share similar pattern of penetrance of symptoms.
   * Očekávám, že nebude potvrzeno. 
   * Probability that correlation in log-odds (the linear predictor) is > TODO:threshold.
 ```{r}
-#TODO
+evaluators[["bbs04_bbs05_cor"]] <- function(samples_diff, samples_diff_bbsome, samples_prediction_bbsome, samples_linear_bbsome) {
+  samples_linear_bbsome %>% 
+    filter(gene %in% c("BBS04","BBS05")) %>%
+    spread(gene, value) %>%
+    group_by(sample) %>%
+    summarise(correlation = cor(BBS04,BBS05)) %>%
+    ungroup() %>%
+    summarise(`BBS4 and BBS5 correlate` = mean(correlation > 0.8))
+}
 ```
 *	BBS2 and BBS7 share similar pattern of penetrance of symptoms.
 *	BBS4 phenotype is the most severe of all BBSome subunits.
@@ -305,71 +293,84 @@ samples_diff_bbsome %>%
   * Probability that BBS4 has highest odds for all phenotypes
   * Probability that a patient with BBS4 has >= #phenotypes than others.
 ```{r}
+evaluators[["bbs04_highest"]] <- function(samples_diff, samples_diff_bbsome, samples_prediction_bbsome, samples_linear_bbsome) {
 samples_diff_bbsome %>% 
   filter(gene.x == "BBS04", gene.y != "BBS04") %>%
   group_by(sample) %>%
   summarise(bbs04_highest = all(odds_ratio >= 1 / min_interesting_effect)) %>%
-  summarise(bbs04_highest = mean(bbs04_highest))
+  summarise(`BBS4 highest odds` = mean(bbs04_highest))
+}
 ```
 ```{r}
-samples_prediction_bbsome %>% 
-  group_by(sample, gene) %>%
-  summarise(num_phenotypes = sum(value)) %>%
-  group_by(sample) %>%
-  mutate(has_most_pheno = num_phenotypes == max(num_phenotypes)) %>%
-  ungroup() %>%
-  group_by(gene) %>%
-  filter(gene == "BBS04") %>%
-  summarise(p_most_pheno = mean(has_most_pheno))
+evaluators[["p_most_pheno"]] <- function(samples_diff, samples_diff_bbsome, samples_prediction_bbsome, samples_linear_bbsome) {
+  samples_prediction_bbsome %>% 
+    group_by(sample, gene) %>%
+    summarise(num_phenotypes = sum(value)) %>%
+    group_by(sample) %>%
+    mutate(has_most_pheno = num_phenotypes == max(num_phenotypes)) %>%
+    ungroup() %>%
+    filter(gene == "BBS04") %>%
+    summarise(`BBS4 most #phenotypes` = mean(has_most_pheno))
+    # group_by(gene) %>%
+    # filter(gene == "BBS04") %>%
+    # summarise(p_most_pheno = mean(has_most_pheno))
+}
 ```
 *	Mutations in different BBSome subunits predispose to different renal phenotype.
   *  Measured as posterior probability, that there is clinically relevant effect for at least `r min_bbsome_pairwise_for_diffs` pairwise comparisons. 
 ```{r}
-samples_diff_bbsome %>% 
-  filter(phenotype == "REN", as.character(gene.x) > as.character(gene.y)) %>%
-  group_by(sample) %>%
-  summarise(enough_pairwise_relevant = sum(is_relevant) >= min_bbsome_pairwise_for_diffs) %>%
-  ungroup() %>%
-  summarise(REN_bbsome_genes_differ = mean(enough_pairwise_relevant))
+evaluators[["REN_bbsome_genes_differ"]] <- function(samples_diff, samples_diff_bbsome, samples_prediction_bbsome, samples_linear_bbsome) {
+  samples_diff_bbsome %>% 
+    filter(phenotype == "REN", as.character(gene.x) > as.character(gene.y)) %>%
+    group_by(sample) %>%
+    summarise(enough_pairwise_relevant = sum(is_relevant) >= min_bbsome_pairwise_for_diffs) %>%
+    ungroup() %>%
+    summarise(REN_bbsome_genes_differ = mean(enough_pairwise_relevant))
+}
 ```
   
 *	There are no apparent differences in the penetrance of retinal dystrophy between functional groups of BBS genes.
   * Očekávám, že nebude potvrzeno.
   * Posterior probability that all pairwise differences are less the min. effect.
 ```{r}
-compute_prob_bbsome_diff_irrelevant <- function(phenotype_name) { 
-  target_column_name = paste0(phenotype_name," no difference")
-  samples_diff_bbsome %>% 
-    filter(phenotype == phenotype_name, as.character(gene.x) > as.character(gene.y)) %>%
-    group_by(sample) %>%
-    summarise(all_irrelevant = all(!is_relevant)) %>%
-    ungroup() %>%
-    summarise(!!target_column_name := mean(all_irrelevant)) 
+evaluator_prob_bbsome_diff_irrelevant <- function(phenotype_name) { 
+  
+  function(samples_diff, samples_diff_bbsome, samples_prediction_bbsome, samples_linear_bbsome) {
+    target_column_name = paste0(phenotype_name," no difference")
+    samples_diff_bbsome %>% 
+        filter(phenotype == phenotype_name, as.character(gene.x) > as.character(gene.y)) %>%
+        group_by(sample) %>%
+        summarise(all_irrelevant = all(!is_relevant)) %>%
+        ungroup() %>%
+        summarise(!!target_column_name := mean(all_irrelevant)) 
+    }
 }
 
-compute_prob_bbsome_diff_irrelevant("OBE")
+evaluators[["OBE_no_diff"]] <- evaluator_prob_bbsome_diff_irrelevant("OBE")
 ```  
 *	There are no apparent differences in the penetrance of obesity between functional groups of BBS genes.
   * Očekávám, že nebude potvrzeno.
   * Stejně jako výše.
 ```{r}
-compute_prob_bbsome_diff_irrelevant("RD")
+evaluators[["RD_no_diff"]] <- evaluator_prob_bbsome_diff_irrelevant("RD")
 ```
   
 *	Polydactyly is more frequent in BBS2 patients compared to BBS1 patients.
   * Directly the probability that the OR > 1 (nebo OR > min. efekt)
 ```{r}
-compute_prob_pairwise_diff <- function(phenotype_name, gene_more_frequent, gene_less_frequent) {
- target_column_name = paste(phenotype_name, gene_more_frequent, "more likely than", gene_less_frequent)
-  samples_diff %>% 
-    filter(phenotype == phenotype_name, gene.x == gene_more_frequent, gene.y == gene_less_frequent) %>%
-    group_by(sample) %>%
-    summarise(all_higher = all(odds_ratio >= 1)) %>%
-    ungroup() %>%
-    summarise(!!target_column_name := mean(all_higher))   
+evaluator_prob_pairwise_diff <- function(phenotype_name, gene_more_frequent, gene_less_frequent) {
+  function (samples_diff, samples_diff_bbsome, samples_prediction_bbsome, samples_linear_bbsome) {
+     target_column_name = paste(phenotype_name, gene_more_frequent, "more likely than", gene_less_frequent)
+      samples_diff %>% 
+        filter(phenotype == phenotype_name, gene.x == gene_more_frequent, gene.y == gene_less_frequent) %>%
+        group_by(sample) %>%
+        summarise(all_higher = all(odds_ratio >= 1)) %>%
+        ungroup() %>%
+        summarise(!!target_column_name := mean(all_higher))   
+  }
 }
 
-compute_prob_pairwise_diff("PD","BBS02","BBS01")
+evaluators[["PD_BBS02_BBS01"]] <- evaluator_prob_pairwise_diff("PD","BBS02","BBS01")
 ```
 
 *	Cognitive impairment is less frequent in BBS3 patients compared to other patients (all canonical BBS genes).
@@ -377,60 +378,123 @@ compute_prob_pairwise_diff("PD","BBS02","BBS01")
   * Probability that all pairwise odds are less
   * Probability that odds against a randomly selected gene are less
 ```{r}
-compute_prob_group_diff_all <- function(phenotype_name, group1, group2, group1_name = paste0(group1, collapse = "_"),group2_name = paste0(group2, collapse = "_")) {
-  target_column_name = paste(phenotype_name,"all",group1_name,"more likely than", group2_name)
-  samples_diff %>% 
-    filter(phenotype == phenotype_name, gene.x %in% group1, gene.y %in% group2) %>%
-    group_by(sample) %>%
-    summarise(all_higher = all(odds_ratio >= 1)) %>%
-    ungroup() %>%
-    summarise(!!target_column_name := mean(all_higher))   
+evaluator_prob_group_diff_all <- function(phenotype_name, group1, group2, group1_name = paste0(group1, collapse = "_"),group2_name = paste0(group2, collapse = "_")) {
+    function (samples_diff, samples_diff_bbsome, samples_prediction_bbsome, samples_linear_bbsome) {
+
+      target_column_name = paste(phenotype_name,"all",group1_name,"more likely than", group2_name)
+      samples_diff %>% 
+        filter(phenotype == phenotype_name, gene.x %in% group1, gene.y %in% group2) %>%
+        group_by(sample) %>%
+        summarise(all_higher = all(odds_ratio >= 1)) %>%
+        ungroup() %>%
+        summarise(!!target_column_name := mean(all_higher))   
+    }
 }
 
-compute_prob_group_diff_random <- function(phenotype_name, group1, group2, group1_name = paste0(group1, collapse = "_"),group2_name = paste0(group2, collapse = "_")) {
-  target_column_name = paste(phenotype_name,"random",group1_name,"more likely than", group2_name)
-  samples_diff %>% 
-    filter(phenotype == phenotype_name, gene.x %in% group1, gene.y %in% group2) %>%
-    group_by(sample) %>%
-    summarise(random_higher = sample(odds_ratio, size = 1) >= 1) %>%
-    ungroup() %>%
-    summarise(!!target_column_name := mean(random_higher))   
+evaluator_prob_group_diff_random <- function(phenotype_name, group1, group2, group1_name = paste0(group1, collapse = "_"),group2_name = paste0(group2, collapse = "_")) {
+      function (samples_diff, samples_diff_bbsome, samples_prediction_bbsome, samples_linear_bbsome) {
+        target_column_name = paste(phenotype_name,"random",group1_name,"more likely than", group2_name)
+        samples_diff %>% 
+          filter(phenotype == phenotype_name, gene.x %in% group1, gene.y %in% group2) %>%
+          group_by(sample) %>%
+          summarise(random_higher = sample(odds_ratio, size = 1) >= 1) %>%
+          ungroup() %>%
+          summarise(!!target_column_name := mean(random_higher))   
+      }
 }
 
-compute_prob_group_diff_all("CI", paste0("BBS0", c(1,2,4,5,7,8,9)), "BBS03", group1_name = "BBSome")
-compute_prob_group_diff_random("CI", paste0("BBS0", c(1,2,4,5,7,8,9)), "BBS03", group1_name = "BBSome")
+evaluators[["CI_BBSO3_all"]] <- evaluator_prob_group_diff_all("CI", paste0("BBS0", c(1,2,4,5,7,8,9)), "BBS03", group1_name = "BBSome")
+evaluators[["CI_BBSO3_random"]] <- evaluator_prob_group_diff_random("CI", paste0("BBS0", c(1,2,4,5,7,8,9)), "BBS03", group1_name = "BBSome")
 ```
 
 *	Cognitive impairment is more frequent in BBS7 patients compared to other patients wirh mutations in BBSome subunits.
   * Očekávám, že nebude potvrzeno
 ```{r}
-compute_prob_group_diff_all("CI", "BBS07", paste0("BBS0", c(1,2,4,5,8,9)), group2_name = "others")
-compute_prob_group_diff_random("CI", "BBS07", paste0("BBS0", c(1,2,4,5,8,9)), group2_name = "others")
+evaluators[["CI_BBS07_all"]] <-  evaluator_prob_group_diff_all("CI", "BBS07", paste0("BBS0", c(1,2,4,5,8,9)), group2_name = "others")
+evaluators[["CI_BBS07_random"]] <-  evaluator_prob_group_diff_random("CI", "BBS07", paste0("BBS0", c(1,2,4,5,8,9)), group2_name = "others")
 
 ```
 
 *	Renal involvement is less frequent in BBS1, BBS4 and BBS8 patients compared to BBS2, BBS7, BBS9 patients.
 ```{r}
-compute_prob_group_diff_all("REN", paste0("BBS0", c(2,7,9)), paste0("BBS0", c(1,4,8)))
-compute_prob_group_diff_random("REN", paste0("BBS0", c(2,7,9)), paste0("BBS0", c(1,4,8)))
+evaluators[["REN_groups_all"]] <- evaluator_prob_group_diff_all("REN", paste0("BBS0", c(2,7,9)), paste0("BBS0", c(1,4,8)))
+evaluators[["REN_groups_random"]] <- evaluator_prob_group_diff_random("REN", paste0("BBS0", c(2,7,9)), paste0("BBS0", c(1,4,8)))
 ```
 
 *	Renal involvment is less frequent in BBS1 patients compared to BBS2 patients.
+```{r}
+evaluators[["REN_BBS1_BBS2"]] <- evaluator_prob_pairwise_diff("REN","BBS02","BBS01")
+```
 *	Renal involvment is less frequent in BBS1 patients compared to BBS10 patients.
+```{r}
+evaluators[["REN_BBS1_BBS10"]] <- evaluator_prob_pairwise_diff("REN","BBS10","BBS01")
+```
 *	Liver involvment is less frequent in BBS1 patients compared to BBS2 patients.
+```{r}
+evaluators[["LIV_BBS1_BBS2"]] <- evaluator_prob_pairwise_diff("LIV","BBS02","BBS01")
+```
 *	Liver involvment is less frequent in BBS1 patients compared to BBS10 patients.
+```{r}
+evaluators[["LIV_BBS1_BBS10"]] <- evaluator_prob_pairwise_diff("LIV","BBS10","BBS01")
+```
 *	Patients with BBS2 mutations are more likely to have heart anomalies compared to patients with other BBSome mutations.
+```{r}
+evaluators[["HEART_BBS2_all"]] <-  evaluator_prob_group_diff_all("HEART", "BBS02", paste0("BBS0", c(1,4,5,7,8,9)), group2_name = "others")
+evaluators[["HEART_BBS2_random"]] <-  evaluator_prob_group_diff_random("HEART", "BBS02", paste0("BBS0", c(1,4,5,7,8,9)), group2_name = "others")
+
+```
 *	Patients with BBS5 mutations are more likely to have liver anomalies compared to patients with other BBSome mutations.
+```{r}
+evaluators[["HEART_BBS5_all"]] <-  evaluator_prob_group_diff_all("HEART", "BBS05", paste0("BBS0", c(1,2,4,7,8,9)), group2_name = "others")
+evaluators[["HEART_BBS5_random"]] <-  evaluator_prob_group_diff_random("HEART", "BBS05", paste0("BBS0", c(1,2,4,7,8,9)), group2_name = "others")
+```
 *	Patients with BBS4 mutations are less likely to have renal anomalies compared to patients with other BBSome mutations.
 
-
-
 ```{r}
+evaluators[["HEART_BBS4_all"]] <-  evaluator_prob_group_diff_all("HEART", paste0("BBS0", c(1,2,5,7,8,9)), "BBS04", group1_name = "others")
+evaluators[["HEART_BBS4_random"]] <-  evaluator_prob_group_diff_random("HEART", paste0("BBS0", c(1,2,5,7,8,9)), "BBS04", group1_name = "others")
 ```
 
 
 
 ```{r}
+evaluation <- all_models %>% 
+ map_df(function(def) {
+    fit <- all_fits[[def$name]]
+    data_for_prediction <- data_for_prediction_base_model(def, genes_to_show, phenotypes_to_show, age_transform = age_transform_from_age(data$age_numbers_groups_guessed))
+    
+    data_for_prediction_bbsome <- data_for_prediction %>% filter_for_BBSome()
+    
+    samples <- get_tidy_samples(fit, data_for_prediction)
+    samples_diff <- get_samples_pairwise_diff(def, samples) %>% mutate(is_relevant = odds_ratio >= min_interesting_effect | odds_ratio <= 1 /min_interesting_effect)
+    
+    samples_diff_bbsome <- get_tidy_samples(fit, data_for_prediction_bbsome) %>% get_samples_pairwise_diff(def, .) %>% mutate(is_relevant = odds_ratio >= min_interesting_effect | odds_ratio <= 1 /min_interesting_effect)
+    
+    samples_prediction_bbsome = get_tidy_samples_prediction(fit, data_for_prediction_bbsome)
+    
+    samples_linear_bbsome <- get_tidy_samples(fit, data_for_prediction_bbsome, scale = "linear")
+    
+    evaluators %>% map(function(evaluator) {
+      evaluator(samples_diff, samples_diff_bbsome, samples_prediction_bbsome, samples_linear_bbsome)
+    }) %>% 
+      do.call(cbind, .) %>%
+      mutate(model_name = def$name)
+})
+
+```
+
+```{r, fig.width = 12}
+conclusions_plot <- evaluation %>% 
+  mutate(model_name = factor(model_name, levels = c(
+   names(all_models)
+  ))) %>%
+  gather("Conclusion","Probability", -model_name) %>%
+  mutate(Conclusion = factor(Conclusion, levels = sort(unique(Conclusion), decreasing = TRUE)),
+         Category = if_else(model_name %in% c("gene_source","gene_source_filtered_lof"), "Main", "Secondary")) %>%
+  ggplot(aes(x = model_name, y = Conclusion, fill = Probability)) + geom_raster() + theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5)) + scale_fill_distiller("Posterior prob.", type = "div", palette = 3, limits = c(0,1)) + facet_grid(.~Category, scales = "free_x", space = "free_x")
+
+conclusions_plot %>% ggsave(here("tmp_pics","conclusions.svg"), ., width = 12, height = 8)
+conclusions_plot
 
 ```
 

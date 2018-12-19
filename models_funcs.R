@@ -47,8 +47,7 @@ fit_imputed_model <- function(def, data_imputed) {
       control = list(adapt_delta = 0.95))   
 }
 
-data_for_prediction_base_model <- function(def, genes_to_show, phenotypes_to_show, ages = c(10,30,50), 
-                                           sexes = c("F","M")) {
+data_for_prediction_base_model <- function(def, genes_to_show, phenotypes_to_show, age_transform = NULL, ages = c(10,30,50),                                            sexes = c("F","M")) {
   result <-  tibble(gene = genes_to_show) %>%
     crossing(tibble(phenotype = phenotypes_to_show)) %>% 
     mutate(functional_group = functional_group_for_gene(gene))
@@ -62,6 +61,9 @@ data_for_prediction_base_model <- function(def, genes_to_show, phenotypes_to_sho
   }
   
   if("age" %in% def$additional_components) {
+    if(is.null(age_transform)) {
+      stop("When working with age, age_transform has to be given")
+    }
     result <- result %>% crossing(tibble(age_std_for_model = age_transform(ages)))
   }
   
@@ -76,13 +78,20 @@ filter_for_BBSome <- function(data_for_prediction) {
   filter(data_for_prediction, functional_group == "BBSome", gene != "BBS18")
 }
 
-get_tidy_samples <- function(fit, data_for_prediction) {
-  fitted_detailed <- fitted(fit, data_for_prediction, summary = FALSE, allow_new_levels = TRUE, nsamples = 1000)
+get_tidy_samples <- function(fit, data_for_prediction, scale = "response") {
+  fitted_detailed <- fitted(fit, data_for_prediction, summary = FALSE, allow_new_levels = TRUE, nsamples = 1000, scale = scale)
   
   samples_tidy <- data_for_prediction %>% 
     cbind(as.tibble(t(fitted_detailed))) %>%
-    gather("sample","value", V1:V1000) %>%
-    mutate(odds = value/(1-value))
+    gather("sample","value", V1:V1000) 
+  
+  
+  if(scale == "response") {
+    samples_tidy %>%
+      mutate(odds = value/(1-value))
+  } else {
+    samples_tidy
+  }
   
 }
 
