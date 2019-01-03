@@ -2,12 +2,13 @@ posterior_interval <- 0.95
 posterior_interval_bounds <- c(0.5 * (1 - posterior_interval), 1 - (0.5 * (1 - posterior_interval)))
 
 
+base_theme_font_size = 9 + 1/3
 base_theme <- theme( 
-                    axis.title = element_text(size = 7), 
-                    axis.text = element_text(size = 7), 
-                    legend.title = element_text(size = 8),
-                    legend.text = element_text(size = 7),
-                    strip.text = element_text(size = 7))
+                    axis.title = element_text(size = base_theme_font_size), 
+                    axis.text = element_text(size = base_theme_font_size), 
+                    legend.title = element_text(size = base_theme_font_size + 1),
+                    legend.text = element_text(size = base_theme_font_size),
+                    strip.text = element_text(size = base_theme_font_size))
 
 scale_color_functional_group <- scale_color_manual(values = c(BBS03 = "#f8766dff", BBSome = "#5f8dd3ff", Chaperonins = "#aa8800ff"))
 
@@ -132,7 +133,11 @@ plot_gene_phenotype_estimates <- function(fit, data_for_prediction) {
 simple_num_format <- function(x) {format(x, digits = 1, scientific = FALSE, drop0trailing = TRUE)}
 
 
-plot_gene_phenotype_differences_estimates <- function(fit, data_for_prediction, genes_to_show = unique(data_for_prediction$gene), group_title = "Gene", data_original = NULL) {
+plot_gene_phenotype_differences_estimates <- function(
+  fit, data_for_prediction, 
+  genes_to_show = unique(data_for_prediction$gene), 
+  group_title = "Gene", data_original = NULL,
+  wider = FALSE) {
   if(is.null(data_for_prediction[["group"]])) {
     data_for_prediction$group <- data_for_prediction$gene
   }
@@ -221,10 +226,15 @@ plot_gene_phenotype_differences_estimates <- function(fit, data_for_prediction, 
         TRUE ~ NA_real_)
       )
     
+    if(wider) {
+      jitter_width = 0.3
+    } else {
+      jitter_width = 0.2
+    }
     original_geom = geom_point(data = data_to_plot_original_imputed, 
                                aes(size = num_cases, x = group, y = odds_ratio), 
                                inherit.aes = FALSE, color = "darkgray", alpha = 0.5,
-                               position = position_jitter(width = 0.2, height = 0))
+                               position = position_jitter(width = jitter_width, height = 0))
     
     limits_geom = geom_hline(
       data = phenotype_limits %>%
@@ -237,19 +247,28 @@ plot_gene_phenotype_differences_estimates <- function(fit, data_for_prediction, 
       )
   }
   
+  if(wider) {
+    size_50 = 3
+    size_95 = 1.5
+    size_range = c(1,4)
+  } else {
+    size_50 = 2
+    size_95 = 1
+    size_range = c(0.5,3)
+  }
     
   data_to_plot %>% ggplot(aes(x = group, y = Estimate, ymin = lower, ymax = upper, color = functional_group)) +
     geom_hline(yintercept = 1, color = "darkred")+ 
     limits_geom +
     original_geom +
-    geom_linerange(aes(ymin = lower50, ymax = upper50), size = 2) +
+    geom_linerange(aes(ymin = lower50, ymax = upper50), size = size_50) +
     geom_linerange() +
     facet_wrap(~phenotype, scales = "free_y", ncol = 4)  + 
     scale_color_functional_group +
     scale_y_log10("Odds ratio", labels = simple_num_format) +
     scale_x_discrete(group_title, labels = bbs_labeller) +
     scale_alpha_continuous(range = c(0.1,0.6)) +
-    scale_size_continuous(range = c(0.5,3)) +
+    scale_size_continuous(range = size_range) +
     theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5)) +
     base_theme +
     guides(color = FALSE, size = FALSE, alpha = FALSE)
@@ -447,30 +466,14 @@ plot_pairwise_differences <- function(model_def, fit, data_for_prediction,
 
 
 plot_lof_differences_estimates <- function(fit, data_for_prediction, genes_to_show = unique(data_for_prediction$gene), group_title = "Gene") {
-  if(is.null(data_for_prediction[["group"]])) {
-    data_for_prediction$group <- data_for_prediction$gene
-  }
   
-  data_for_prediction_lof <-  data_for_prediction %>% mutate(loss_of_function_certain = 1) %>% rbind(
-    data_for_prediction %>% mutate(loss_of_function_certain = 0)
-  )
-  
-  samples_tidy_lof <- get_tidy_samples(fit, data_for_prediction_lof)
-  
-
-  data_to_plot <- samples_tidy_lof %>% 
-    filter(gene %in% genes_to_show, loss_of_function_certain == 1) %>%
-    inner_join(samples_tidy_lof %>% filter(loss_of_function_certain == 0), 
-               by = c("phenotype" = "phenotype", "gene" = "gene", "group" = "group", "sample" = "sample", 
-                      "functional_group" = "functional_group")) %>%
-  #mutate(relative = value - avg) %>%
-    mutate(relative = odds.x / odds.y) %>%
+  get_samples_lof_diff(fit, data_for_prediction) %>%
     group_by(phenotype, group, functional_group) %>%
-    summarise(Estimate = median(relative), 
-              lower = quantile(relative, posterior_interval_bounds[1]),
-              upper = quantile(relative, posterior_interval_bounds[2]),
-              lower50 = quantile(relative, 0.25),
-              upper50 = quantile(relative, 0.75)
+    summarise(Estimate = median(odds_ratio), 
+              lower = quantile(odds_ratio, posterior_interval_bounds[1]),
+              upper = quantile(odds_ratio, posterior_interval_bounds[2]),
+              lower50 = quantile(odds_ratio, 0.25),
+              upper50 = quantile(odds_ratio, 0.75)
     )
   
   data_to_plot %>% ggplot(aes(x = group, y = Estimate, ymin = lower, ymax = upper, color = functional_group)) +
