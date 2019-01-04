@@ -53,10 +53,10 @@ data_for_prediction_base_model <- function(def, genes_to_show, phenotypes_to_sho
     mutate(functional_group = functional_group_for_gene(gene))
   
   if("source" %in% def$additional_components) {
-    result$source = "new_source"
+    result$source = "new_source" #A new factor level
   }
   
-  if("lof" %in% def$additional_components) {
+  if("lof" %in% def$additional_components || "lof per gene" %in% def$additional_components) {
     result$loss_of_function_certain = 1
   }
   
@@ -110,8 +110,7 @@ get_samples_pairwise_diff <- function(model_def, samples_tidy) {
 
   samples_tidy %>% 
     inner_join(samples_tidy, by = join_by) %>%
-    mutate(odds.x = (value.x / (1 - value.x)),
-           odds.y = (value.y / (1 - value.y)), odds_ratio =  odds.x / odds.y)
+    mutate(odds_ratio =  odds.x / odds.y)
 }
 
 get_tidy_samples_prediction <- function(fit, data_for_prediction) {
@@ -121,4 +120,24 @@ get_tidy_samples_prediction <- function(fit, data_for_prediction) {
     cbind(as.tibble(t(fitted_detailed))) %>%
     gather("sample","value", V1:V1000) 
   
+}
+
+get_samples_lof_diff <- function(fit, data_for_prediction) {
+  if(is.null(data_for_prediction[["group"]])) {
+    data_for_prediction$group <- data_for_prediction$gene
+  }
+  
+  data_for_prediction_lof <-  data_for_prediction %>% mutate(loss_of_function_certain = 1) %>% rbind(
+    data_for_prediction %>% mutate(loss_of_function_certain = 0)
+  )
+  
+  samples_tidy_lof <- get_tidy_samples(fit, data_for_prediction_lof)
+  
+  
+  samples_tidy_lof %>% 
+    filter(loss_of_function_certain == 1) %>%
+    inner_join(samples_tidy_lof %>% filter(loss_of_function_certain == 0), 
+               by = c("phenotype" = "phenotype", "gene" = "gene", "group" = "group", "sample" = "sample", 
+                      "functional_group" = "functional_group")) %>%
+    mutate(odds_ratio = odds.x / odds.y)  
 }

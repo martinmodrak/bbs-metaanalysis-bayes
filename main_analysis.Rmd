@@ -311,8 +311,8 @@ The plot above shows posterior 95% (thin) and 50% (thick) credible intervals for
 ## Summary for BBSome genes
 
 
-```{r, fig.width=8, fig.height=4}
-differences_bbsome_plot <- plot_gene_phenotype_differences_estimates(fit, data_for_prediction_BBSome, genes_to_show = genes_to_show, data_original = data_long)
+```{r, fig.width=10, fig.height=4}
+differences_bbsome_plot <- plot_gene_phenotype_differences_estimates(fit, data_for_prediction_BBSome, genes_to_show = genes_to_show, data_original = data_long, wider = TRUE) + theme(axis.text.x = element_text(angle = 45, hjust = 0.7, vjust =0.7)) 
 differences_bbsome_plot 
 ```
 
@@ -383,12 +383,13 @@ img_path = here("tmp_pics")
 if(!dir.exists(img_path)) {
   dir.create(img_path)
 }
-types = c(".svg", ".png")
+#types = c(".svg", ".png")
+types = c(".pdf")
 
 for(type in types) {
   differences_func_group_plot %>% ggsave(paste0("functional_groups", type), plot = ., path = img_path,height = std_height, width = 5)
   
-  differences_bbsome_plot %>% ggsave(paste0("bbsome_overall", type), plot = ., path = img_path,height = std_height, width = std_width)
+  differences_bbsome_plot %>% ggsave(paste0("bbsome_overall", type), plot = ., path = img_path,height = std_height, width = 10)
   
   differences_chaperonins_plot %>% ggsave(paste0("chaperonins_overall", type), plot = ., path = img_path,height = std_height, width = std_width)
   

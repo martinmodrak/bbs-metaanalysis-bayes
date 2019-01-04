@@ -20,7 +20,11 @@ formula_gene_only <- brmsformula(phenotype_value ~ (1||phenotype) + ((0 + phenot
 
 formula_gene_source <- brmsformula(update(formula_gene_only, ~ . + ((0 + phenotype)||source)) , family = "bernoulli")
 
-formula_gene_source_lof <- brmsformula(update(formula_gene_source, ~ . + ((0 + phenotype : loss_of_function_certain)||gene)) , family = "bernoulli")
+formula_gene_lof <- brmsformula(update(formula_gene_only, ~ . + phenotype : loss_of_function_certain) , family = "bernoulli")
+formula_gene_lof_per_gene <- brmsformula(update(formula_gene_lof, ~ . + ((0 + phenotype : loss_of_function_certain)||gene)) , family = "bernoulli")
+
+formula_gene_source_lof <- brmsformula(update(formula_gene_source, ~ . + phenotype : loss_of_function_certain) , family = "bernoulli")
+formula_gene_source_lof_per_gene <- brmsformula(update(formula_gene_source_lof, ~ . + ((0 + phenotype : loss_of_function_certain)||gene)) , family = "bernoulli")
 
 
 formula_gene_source_sex <- brmsformula(update.formula(formula_gene_source,  ~ . + (1||Sex : phenotype)), family = "bernoulli")
@@ -46,13 +50,18 @@ models_base <- list(
     ),
   
   gene_lof = list(
-    formula = brmsformula(update(formula_gene_only, ~ . + ((0 + phenotype : loss_of_function_certain)||gene)) , 
-                          family = "bernoulli"), 
+    formula = formula_gene_lof, 
     priors = default_priors, 
     note = "",
     additional_components = c("lof"), filter = "none"
   ),
-
+  gene_lof_per_gene = list(
+    formula = formula_gene_lof_per_gene, 
+    priors = default_priors, 
+    note = "",
+    additional_components = c("lof per gene"), filter = "none"
+  ),
+  
   gene_source = list(
     formula = formula_gene_source, 
     priors = default_priors, 
@@ -72,6 +81,13 @@ models_base <- list(
     priors = default_priors, 
     note = "",
     additional_components = c("source", "lof"), filter = "none"
+  ),
+
+  gene_source_lof_per_gene =  list(
+    formula = formula_gene_source_lof_per_gene, 
+    priors = default_priors, 
+    note = "",
+    additional_components = c("source", "lof per gene"), filter = "none"
   ),
   
   gene_source_genecor = list(
