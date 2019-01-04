@@ -59,8 +59,13 @@ data_long <- data_long_from_data(data)
 Base models are those that work with (a subset of) the original dataset, without any imputation. The models are defined in file `models.R`. They differ in the model formula, subsets of the dataset they use and priors for model coefficients. Here is the list of base models.
 
 ```{r}
-models_base %>% map_df(function(def) {
-  tibble(name = def$name, formula = as.character(def$formula)[1], filter = def$filter,  note = def$note)
+models_base %>% walk(function(def) {
+  cat(def$name,":\n\tformula:", as.character(def$formula)[1], "\n\tdata filter: ", def$filter)
+  if(def$note != "") {
+    cat("\tNote:", def$note)
+  }
+  cat("\n\n")
+  #tibble(name = def$name, formula = as.character(def$formula)[1], filter = def$filter,  note = def$note)
 })
 ```
 
@@ -184,7 +189,7 @@ Once again `gene_source` and `gene_source_lof` are almost identical. Overall the
 
 The substantial problems with fitting REN in `gene_source` are potentially troubling.
 
-This nevertheless indicates that there is some missing information in all fits.
+This nevertheless indicates that there is some missing information in all fits. 
 
 ```{r, fig.width=8}
 if(compute_pp_checks) {
@@ -198,7 +203,7 @@ The comparison between `gene_source` and `gene_lof` is not clear as for sources 
 
 `gene_source_filtered_lof` removes some of the issues in `gene_source` (e.g. Scheidecker et al. 2013), but retains others (Chaki et al., Schaefer et al. 2011 (a), Schaefer et al. 2016.).
 
-Once again there is a minor advantage in filtering out LOF data.
+Once again there is a minor advantage in filtering out LOF data while there is no advantage to including LOF in the model. There are at least two possible explanations: when filtering for LOF, there is much less data, but almost the same number of parameters, so the model can accommodate (or even slightly overfit) the data. Another plausible explanation is that there is some important variability among the patients with mutations that are not certainly LOF which hinder fitting.  We however couldn't devise a defensible way to further split the mutations that are not certainly LOF. 
 
 ```{r, fig.width=10, fig.height=7}
 plot_pairwise_differences(models_base$gene_source_filtered_lof, fits_base$gene_source_filtered_lof, data_for_prediction_base_model(models_base$gene_source_filtered_lof, genes_to_show, phenotypes_to_show) %>% filter_for_BBSome())
