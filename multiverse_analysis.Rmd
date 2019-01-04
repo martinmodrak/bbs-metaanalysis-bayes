@@ -281,7 +281,7 @@ evaluator_lof <- function(def, fit) {
    samples_tidy %>% 
      group_by(sample, phenotype) %>% summarise(enough_genes = sum(odds_ratio > 1) >= n_genes_lof_different) %>%
      group_by(sample) %>% summarise(enough_phenotypes = sum(enough_genes) >= min_phenotypes_for_diffs) %>%
-     ungroup() %>% summarise(`LOF mutations more severe` = mean(enough_phenotypes))
+     ungroup() %>% summarise(`cLOF mutations more severe` = mean(enough_phenotypes))
  } else {
    tibble(`cLOF mutations more severe` = NA_real_)
  }
@@ -520,10 +520,10 @@ freq_conclusions <- readr::read_csv(here("private_data","BBS - Frequentist concl
 freq_conclusions <- freq_conclusions %>% 
   mutate(Conclusion = factor(Conclusion, levels = rev(Conclusion[order]))) %>%
   gather("model_name","p", `p-value-all`, `p-value-cLOF`) %>%
-  mutate(model_nice = paste0("frequentist ", gsub("p-value-","", model_name)), Category = "Main")
+  mutate(model_nice = paste0("frequentist ", gsub("p-value-","", model_name)), Category = "Freq.")
 ```
 
-```{r, fig.width = 7, fig.height = 4.5}
+```{r, fig.width = 8, fig.height = 4.5}
 nice_model_name <- function(x)  {
   x %>% gsub("only","none", .) %>% gsub("gene_","",.) %>% gsub("filtered_","filtered ", .) %>%
     gsub("very_narrow","very narrow", .) %>% 
@@ -552,16 +552,23 @@ evaluation_processed <- evaluation %>%
                               model_name %in% c("gene_only", "gene_lof", "gene_lof_per_gene", "gene_only_filtered_lof", "gene_source_very_narrow") ~ "Bad fits", 
                               TRUE ~ "Secondary") %>% factor(levels = c("Main","Secondary","Bad fits")))
 
-conclusions_plot <- evaluation_processed %>%
-  ggplot(aes(x = model_nice, y = Conclusion, fill = Probability)) + geom_tile() + 
-    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5)) + 
-    #scale_fill_distiller("Posterior prob.", type = "div", palette = 3, limits = c(0,1)) +
-    scale_fill_gradientn("Posterior prob.", colours = c("#1b7837","#f0f0f0", "#f0f0f0", "#762a83"),values = c(0, 0.25,0.75,1),  limits = c(0,1)) +
-    #scale_fill_gradientn("Posterior prob.", colours = c("#1b7837", "#d9f0d3","#e7d4e8", "#762a83"),values = c(0, 0.25,0.75,1),  limits = c(0,1)) +
-    #scale_fill_gradientn("Posterior prob.", colours = c("#1b7837", "#a6dba0","#c2a5cf", "#762a83"),values = c(0, 0.25,0.75,1),  limits = c(0,1)) +
-    scale_x_discrete("Model components/modifications besides gene") +
-    facet_grid(.~Category, scales = "free_x", space = "free_x") + base_theme
+build_conclusion_plot <- function(evaluation_processed, categories = TRUE) {
+  if(categories) {
+    facet <- facet_grid(.~Category, scales = "free_x", space = "free_x") 
+  } else {
+    facet <- NULL
+  }
 
+  evaluation_processed %>%
+    ggplot(aes(x = model_nice, y = Conclusion, fill = Probability)) + geom_tile() + 
+      theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5)) + 
+      scale_fill_gradientn("Posterior prob.", colours = c("#1b7837","#f0f0f0", "#f0f0f0", "#762a83"),
+                           values = c(0, 0.25,0.75,1),  limits = c(0,1)) +
+      scale_x_discrete("Model components/modifications besides gene") +
+      facet + base_theme
+}
+
+conclusions_plot <- build_conclusion_plot(evaluation_processed)
 conclusions_plot
 
 ```
@@ -571,39 +578,77 @@ Heatmap of posterior probability of statements characterizing individual conclus
 
 
 ```{r}
-significance_pos = 1 - (log10(0.05) / log10(min(freq_conclusions$p, na.rm = TRUE)))
+build_freq_conclusions_plot <- function(freq_conclusions, categories = TRUE) {
 
+  significance_pos <- 1 - (log10(0.05) / log10(min(freq_conclusions$p, na.rm = TRUE)))
+  
+  if(categories) {
+    facet <- facet_grid(.~Category, scales = "free_x", space = "free_x") 
+  } else {
+    facet <- NULL
+  }
+  
+  freq_conclusions %>% ggplot(aes(x = model_nice, y = Conclusion, fill = p)) + geom_tile() + 
+      theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5)) + 
+      scale_fill_gradientn("p-value", 
+                           colours = c("#7f0000", "#fdd49e","#f0f0f0", "#f0f0f0"),
+                           values = c(0, significance_pos - 0.01, significance_pos, 1), 
+                           trans = "log10",
+                           breaks = c(1e-8,1e-4,0.05), labels = c("1e-8","1e-4","0.05")) +
+      scale_x_discrete("Freq. type") +
+      expand_limits(fill = 1) +
+      facet + base_theme
+}
 
-freq_conclusions_plot <-  freq_conclusions %>% ggplot(aes(x = model_nice, y = Conclusion, fill = p)) + geom_tile() + 
-    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5)) + 
-    #scale_fill_gradient(low = "#7f0000", high = "#f0f0f0") +
-    # scale_fill_gradientn(colours = c("red", "blue"),
-    #                     values = log10(c(min(freq_conclusions$p, na.rm = TRUE), 1))) +
-    scale_fill_gradientn(colours = c("#7f0000", "#fdd49e","#f0f0f0", "#f0f0f0"),
-                         values = c(0, significance_pos - 0.01, significance_pos, 1), 
-                         trans = "log10",
-                         breaks = c(1e-8,1e-4,0.05), labels = c("1e-8","1e-4","0.05"),
-                         guide = guide_colorbar(direction = "horizontal")) +
-#                         values = log10(c(min(freq_conclusions$p, na.rm = TRUE), 0.049, 0.05, 1))) +
-    scale_x_discrete("Freq. type") +
-    expand_limits(fill = 1) +
-    facet_grid(.~Category, scales = "free_x", space = "free_x") + base_theme
+freq_conclusions_plot <-  build_freq_conclusions_plot(freq_conclusions)
 
 freq_conclusions_plot
 ```
 
 
 ```{r, fig.width= 9, fig.height=4.5}
+build_combined_conclusions_plot <- function(freq_conclusions_plot, conclusions_plot, rel_widths_plots, rel_widths_legend) {
+  hide_guide_theme <- theme(legend.position = 'none')
+  hide_y_axis_theme <- theme(axis.title.y = element_blank(), 
+                             axis.text.y = element_blank(), 
+                             axis.line.y = element_blank(),
+                             axis.ticks.y = element_blank())
+  
+  plot_grid(
+    plot_grid(freq_conclusions_plot + hide_guide_theme + theme(plot.margin = margin(7,0,7,7, "pt")), 
+              conclusions_plot + hide_y_axis_theme + hide_guide_theme + theme(plot.margin = margin(7,7,7, 0, "pt")), 
+              align = "h",rel_widths = rel_widths_plots),
+    plot_grid(
+      cowplot::get_legend(freq_conclusions_plot), 
+      cowplot::get_legend(conclusions_plot),
+      ncol = 1, nrow = 3),
+    rel_widths = rel_widths_legend
+  )
+}
 
-
-combined_conclusions_plot <- plot_grid(conclusions_plot + gg, freq_conclusions_plot + theme(axis.title.y = element_blank(), axis.text.y = element_blank()) + gg, align = "h",rel_widths = c(5, 1))
-
+combined_conclusions_plot <- build_combined_conclusions_plot(freq_conclusions_plot, conclusions_plot, rel_widths_plots = c(1, 1.1), rel_widths_legend = c(4,1)) 
 combined_conclusions_plot
+```
+
+```{r fig.width=7, fig.height=3.8}
+hide_titles_theme <- theme(axis.title.x = element_blank())
+
+combined_conclusions_main_plot <- build_combined_conclusions_plot(
+  build_freq_conclusions_plot(freq_conclusions %>% filter(model_nice == "frequentist all") %>% mutate(model_nice = "frequentist")
+                              , categories = FALSE) + hide_titles_theme,
+  build_conclusion_plot(evaluation_processed %>% filter(model_nice == "source") %>% mutate(model_nice = "Bayesian"),
+                        categories = FALSE) + hide_titles_theme,
+  rel_widths_plots = c(9.6,1),
+  rel_widths_legend = c(1,1)
+)
+
+combined_conclusions_main_plot
 ```
 
 
 ```{r}
-conclusions_plot %>% ggsave(here("tmp_pics","conclusions.svg"), ., width = 6, height = 4, dpi = 500)
+combined_conclusions_plot %>% ggsave(here("tmp_pics","conclusions.pdf"), ., width = 9, height = 4.5)
+combined_conclusions_main_plot %>% ggsave(here("tmp_pics","conclusions_main.pdf"), ., width = 7, height = 3.8)
 ```
 
 
