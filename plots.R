@@ -274,29 +274,35 @@ plot_gene_phenotype_differences_estimates <- function(
     guides(color = FALSE, size = FALSE, alpha = FALSE)
 }
 
-plot_pairwise_differences <- function(model_def, fit, data_for_prediction, 
-                                      plot_types = c("heatmap_min","heatmap_max","heatmap_ci_excl","linerange_all"), 
-                                      out_func = function(name, plot) {print(plot)},
-                                      title_add = "") {
+plot_correlations <- function(model_def, fit, data_for_prediction, 
+                              out_func = function(name, plot) {print(plot)},
+                              title_add = "") {
+  
   samples_tidy <- get_tidy_samples(fit, data_for_prediction) 
   samples_diff <- get_samples_pairwise_diff(model_def, samples_tidy)
   
-  
-  if("cor" %in% plot_types) {
+  if("cor" == plot_type) {
     samples_to_show = sample(unique(samples_tidy$sample), 100)
     data_for_cor <- samples_diff %>%
       filter(sample %in% samples_to_show) 
     
     for(ph in unique(data_for_prediction$phenotype)) {
       p <- data_for_cor %>% filter(phenotype == ph) %>%
-          ggplot(aes(x = odds.x, y = odds.y)) + 
-          geom_point(size = 0.1) + facet_grid(gene.x ~ gene.y, scales = "free") +
-          scale_x_log10() + scale_y_log10() +
-          ggtitle(paste0("Correlations for ", ph)) +
-          theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5))
+        ggplot(aes(x = odds.x, y = odds.y)) + 
+        geom_point(size = 0.1) + facet_grid(gene.x ~ gene.y, scales = "free") +
+        scale_x_log10() + scale_y_log10() +
+        ggtitle(paste0("Correlations for ", ph)) +
+        theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5))
       out_func(paste0("cor_",ph), p)
     }
-   }
+  }  
+}
+
+plot_pairwise_differences <- function(model_def, fit, data_for_prediction, 
+                                      plot_type = "linerange_all", 
+                                      title_add = "") {
+  samples_tidy <- get_tidy_samples(fit, data_for_prediction) 
+  samples_diff <- get_samples_pairwise_diff(model_def, samples_tidy)
   
   data_for_diff <- samples_diff %>% 
     group_by(gene.x, gene.y, phenotype) %>%
@@ -332,7 +338,7 @@ plot_pairwise_differences <- function(model_def, fit, data_for_prediction,
   theme_heatmap <- theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5),
                          axis.title = element_blank())
 
-  if("heatmap_p" %in% plot_types) {
+  if("heatmap_p" == plot_type) {
     lims <- c(-1, 1) 
     p <- data_for_diff  %>% 
       ggplot(aes(x = gene.x, y = gene.y, fill = p_diff)) +
@@ -343,10 +349,9 @@ plot_pairwise_differences <- function(model_def, fit, data_for_prediction,
       theme_heatmap +
       facet_wrap(~phenotype, ncol = 4) +
       ggtitle(paste0("Probability the difference is systematic", title_add))
-    out_func(paste0("heatmap_p", title_add), p)
   }
   
-  if("heatmap_ci_excl" %in% plot_types) {
+  if("heatmap_ci_excl" == plot_type) {
     lims <- c(-1, 1) 
     p <- data_for_diff  %>% 
       ggplot(aes(x = gene.x, y = gene.y, fill = CI_excl_one_sign)) +
@@ -359,11 +364,10 @@ plot_pairwise_differences <- function(model_def, fit, data_for_prediction,
       scale_y_discrete(labels = bbs_labeller) +
       facet_wrap(~phenotype, ncol = 4) +
       ggtitle(paste0("Widest credible interval excluding 0", title_add))
-    out_func(paste0("heatmap_ci_excl", title_add), p)
   }
   
   
-  if("heatmap_min" %in% plot_types) {
+  if("heatmap_min" == plot_type) {
 
     p <- data_for_diff %>% 
       ggplot(aes(x = gene.x, y = gene.y, fill = min_probable_OR)) +
@@ -377,13 +381,11 @@ plot_pairwise_differences <- function(model_def, fit, data_for_prediction,
         scale_y_discrete(labels = bbs_labeller) +
         facet_wrap(~phenotype, ncol = 4) +
       ggtitle(paste0("Odds ratio, 95% conservative", title_add))
-    out_func(paste0("heatmap_min", title_add), p)
-    
   }
   
 
   
-  if("heatmap_max" %in% plot_types) {
+  if("heatmap_max" == plot_type) {
     p <- data_for_diff %>%  
       ggplot(aes(x = gene.x, y = gene.y, fill = max_probable_OR)) +
       geom_tile(width = 1, height = 1) +
@@ -394,7 +396,6 @@ plot_pairwise_differences <- function(model_def, fit, data_for_prediction,
       scale_y_discrete(labels = bbs_labeller) +
       facet_wrap(~phenotype, ncol = 4)+
       ggtitle(paste0("Odds ratio, 95% extreme", title_add))
-    out_func(paste0("heatmap_max", title_add), p)
   }
   
   
@@ -403,7 +404,7 @@ plot_pairwise_differences <- function(model_def, fit, data_for_prediction,
                                                  values = c(0,0.4,0.6,0.95, 1), breaks = c(0,0.5,0.95),
                                                  labels = c("0%","50%","95%"))
 
-  if("linerange" %in% plot_types) {
+  if("linerange" == plot_type) {
     for(ph in unique(data_for_prediction$phenotype)) {
       p <- data_for_diff %>% filter(phenotype == ph) %>%
         ggplot(aes(color = CI_excl_one)) + 
@@ -417,7 +418,6 @@ plot_pairwise_differences <- function(model_def, fit, data_for_prediction,
         base_theme +
         facet_grid( ~ gene.y)  +
         ggtitle(paste0("95% and 50% credible intervals for pairwise odds ratios",ph , title_add))
-      out_func(paste0("linerange_", ph, title_add), p)
     }
   }
 
@@ -428,7 +428,7 @@ plot_pairwise_differences <- function(model_def, fit, data_for_prediction,
   theme_linerange_all <- theme(axis.title = element_blank(), 
                                legend.title = element_text(angle = 270, vjust = 0.2))
   
-  if("linerange_all" %in% plot_types) {
+  if("linerange_all" == plot_type) {
       p <- data_for_diff %>% 
         ggplot(aes(color = CI_excl_one)) + 
         geom_vline(xintercept = 1, color = "darkred") +
@@ -443,11 +443,10 @@ plot_pairwise_differences <- function(model_def, fit, data_for_prediction,
         base_theme +
         theme_linerange_all +
         ggtitle(paste0("95% and 50% credible intervals for pairwise odds ratios", title_add))
-      out_func(paste0("linerange_all", title_add), p)
   }
   
     
-  if("linerange_all2" %in% plot_types) {
+  if("linerange_all2" == plot_type) {
     p <- data_for_diff %>% 
       ggplot(aes(y = phenotype, yend = phenotype, color = CI_excl_one)) + 
       geom_vline(xintercept = 0, color = "darkred") +
@@ -459,9 +458,9 @@ plot_pairwise_differences <- function(model_def, fit, data_for_prediction,
       theme_linerange_all  +
       base_theme +
       ggtitle(paste0("95% and 50% credible intervals for pairwise differences", title_add))
-    out_func(paste0("linerange_all2", title_add), p)
-    out_func(p)
-  }  
+  }
+  
+  p
 }
 
 
