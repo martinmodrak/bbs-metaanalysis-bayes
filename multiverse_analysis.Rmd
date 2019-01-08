@@ -517,8 +517,9 @@ freq_conclusions <- readr::read_csv(here("private_data","BBS - Frequentist concl
 ))
 
 
+freq_conclusions_order <- order(freq_conclusions$order)
 freq_conclusions <- freq_conclusions %>% 
-  mutate(Conclusion = factor(Conclusion, levels = rev(Conclusion[order]))) %>%
+  mutate(Conclusion = factor(Conclusion, levels = rev(Conclusion[freq_conclusions_order]))) %>%
   gather("model_name","p", `p-value-all`, `p-value-cLOF`) %>%
   mutate(model_nice = paste0("frequentist ", gsub("p-value-","", model_name)), Category = "Freq.")
 ```
@@ -552,6 +553,8 @@ evaluation_processed <- evaluation %>%
                               model_name %in% c("gene_only", "gene_lof", "gene_lof_per_gene", "gene_only_filtered_lof", "gene_source_very_narrow") ~ "Bad fits", 
                               TRUE ~ "Secondary") %>% factor(levels = c("Main","Secondary","Bad fits")))
 
+plots_na_color <- "#606060"
+
 build_conclusion_plot <- function(evaluation_processed, categories = TRUE) {
   if(categories) {
     facet <- facet_grid(.~Category, scales = "free_x", space = "free_x") 
@@ -560,11 +563,14 @@ build_conclusion_plot <- function(evaluation_processed, categories = TRUE) {
   }
 
   evaluation_processed %>%
-    ggplot(aes(x = model_nice, y = Conclusion, fill = Probability)) + geom_tile() + 
+    ggplot(aes(x = model_nice, y = Conclusion, fill = Probability, colour = "")) + geom_tile() + 
       theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5)) + 
       scale_fill_gradientn("Posterior prob.", colours = c("#1b7837","#f0f0f0", "#f0f0f0", "#762a83"),
-                           values = c(0, 0.25,0.75,1),  limits = c(0,1)) +
+                           values = c(0, 0.25,0.75,1),  limits = c(0,1), na.value = plots_na_color) +
       scale_x_discrete("Model components/modifications besides gene") +
+      scale_colour_manual(values=NA) +              
+      #Using color scale to create legend for NA
+      guides(fill = guide_colorbar(order = 10), colour=guide_legend("ND", override.aes=list(colour=plots_na_color, fill = plots_na_color))) +
       facet + base_theme
 }
 
@@ -594,8 +600,10 @@ build_freq_conclusions_plot <- function(freq_conclusions, categories = TRUE) {
                            colours = c("#7f0000", "#fdd49e","#f0f0f0", "#f0f0f0"),
                            values = c(0, significance_pos - 0.01, significance_pos, 1), 
                            trans = "log10",
-                           breaks = c(1e-8,1e-4,0.05), labels = c("1e-8","1e-4","0.05")) +
+                           breaks = c(1e-8,1e-4,0.05), labels = c("1e-8","1e-4","0.05"),
+                           na.value = plots_na_color) +
       scale_x_discrete("Freq. type") +
+      guides(fill = guide_colorbar(reverse = TRUE)) +
       expand_limits(fill = 1) +
       facet + base_theme
 }
@@ -607,7 +615,7 @@ freq_conclusions_plot
 
 
 ```{r, fig.width= 9, fig.height=4.5}
-build_combined_conclusions_plot <- function(freq_conclusions_plot, conclusions_plot, rel_widths_plots, rel_widths_legend) {
+build_combined_conclusions_plot <- function(freq_conclusions_plot, conclusions_plot, rel_widths_plots, rel_widths_legend, rel_heights_legend) {
   hide_guide_theme <- theme(legend.position = 'none')
   hide_y_axis_theme <- theme(axis.title.y = element_blank(), 
                              axis.text.y = element_blank(), 
@@ -621,12 +629,12 @@ build_combined_conclusions_plot <- function(freq_conclusions_plot, conclusions_p
     plot_grid(
       cowplot::get_legend(freq_conclusions_plot), 
       cowplot::get_legend(conclusions_plot),
-      ncol = 1, nrow = 3),
+      ncol = 1, nrow = 3, rel_heights = rel_heights_legend),
     rel_widths = rel_widths_legend
   )
 }
 
-combined_conclusions_plot <- build_combined_conclusions_plot(freq_conclusions_plot, conclusions_plot, rel_widths_plots = c(1, 1.1), rel_widths_legend = c(4,1)) 
+combined_conclusions_plot <- build_combined_conclusions_plot(freq_conclusions_plot, conclusions_plot, rel_widths_plots = c(1, 1.1), rel_widths_legend = c(4,1), rel_heights_legend = c(1,1.9,0.5)) 
 combined_conclusions_plot
 ```
 
@@ -638,8 +646,9 @@ combined_conclusions_main_plot <- build_combined_conclusions_plot(
                               , categories = FALSE) + hide_titles_theme,
   build_conclusion_plot(evaluation_processed %>% filter(model_nice == "source") %>% mutate(model_nice = "Bayesian"),
                         categories = FALSE) + hide_titles_theme,
-  rel_widths_plots = c(9.6,1),
-  rel_widths_legend = c(1,1)
+  rel_widths_plots = c(9.2,1),
+  rel_widths_legend = c(1,1),
+  rel_heights_legend = c(1,1.8,0.01)
 )
 
 combined_conclusions_main_plot
