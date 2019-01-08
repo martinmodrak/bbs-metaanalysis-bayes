@@ -64,6 +64,13 @@ run_pp_checks <- function(model_def, fit, data_long,
        small_labels
      ) %>% out_func
   }
+  if("source_10" %in% types) {
+    filter_10 <- data %>% group_by(source) %>% mutate(include = length(unique(ID)) >= 10) %>% pull(include)
+    (my_ppc_bars_grouped(data$phenotype_value[filter_10], predicted[, filter_10], group = data$source[filter_10]) + 
+       ggtitle(paste0("PPCheck sources with >= 10 patients for ", model_def$name)) +
+       small_labels
+    ) %>% out_func
+  }
   if("gene_lof" %in% types) {
     (my_ppc_bars_grouped(data$phenotype_value, predicted, group = interaction(data$loss_of_function, gene_groups)) + ggtitle(paste0("PPCheck gene_lof for ", model_def$name))) %>% out_func
   }
