@@ -37,15 +37,14 @@ if(!dir.exists(here(stored_fits_dir))) {
 
 ```
 
-*This is Appendix 2 for the paper "Exploring the function of the BBSome using clinical data: Meta-analysis of genotype-phenotype associations in Bardet-Biedl Syndrome". The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes *
+*This is Appendix 1 for the paper "Exploring the function of the BBSome using clinical data: Meta-analysis of genotype-phenotype associations in Bardet-Biedl Syndrome". The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes *
+
 
 TODO:
-This is a supplement for the paper XXXX.
-
-TODO:
-- hlavni analyza bude bez LOF (v supplementu vysvětlit, proč je horší - horší vzájemný fit)
-- přidat i gene_source_filtered_lof
 - číslovat obrázky
+Text:
+- Upravit text o filtraci (vyrazene fenotypy) - nebo spustit jeste nekdy se vsemi feno...
+
 
 This document describes the Bayesian analysis reported in the main manuscript. A separate supplementary file (TODO add ID of the file) describes the multiverse analysis where we test how the results change with different modelling assumptions. All references to "multiverse analysis" in this text point to this document.
 
@@ -239,7 +238,7 @@ We use a generalized linear model with logit link and hierarchial terms. Let us 
 For the model, we expand the data into long form, i.e. each row in the dataset corresponds to a combination of patient and reported phenotype (a patient with reported values for 3 phenotypes would correspond to 3 rows in the long form dataset). The model is specified with the following brms formula, using the Bernoulli family with logit link function:
 
 ```{r}
-main_model_def <- models_base$gene_source
+main_model_def <- models_base$gene_source_lof
 main_model_def$formula
 ```
 
@@ -276,7 +275,7 @@ $$
 
 Note that the prior on $\beta^1$ is $P$-dimensional multivariete normal $\mathcal{N}_P$, explicitly modelling the correlation $\bar{\boldsymbol{\Sigma}}$ between the prevalence of individual phenotypes and per-phenotype variance $\sigma_{2,p}$, while the other priors are univariete normal.
 
-The attached multiverse analysis shows that the results are almost identical when the priors are different.
+The $N(0, 2)$ priors on the various parameters are mildly skeptical in that they exclude that any of the parameter would explain odds ratio larger than $\sim 50$. The attached multiverse analysis shows that the results are almost identical when the priors are different.
 
 # Main results
 
@@ -355,7 +354,7 @@ This shows pairs where we are fairly certain there is a systematic difference an
 
 ```{r, fig.width=8, fig.height=4}
 
-plot_pairwise_differences(main_model_def, fit, data_for_prediction_BBSome, plot_types = "heatmap_max")
+plot_pairwise_differences(main_model_def, fit, data_for_prediction_BBSome, plot_type = "heatmap_max")
 ```
 
 The most extreme (furthest from one) pairwise odds ratios within 95% posterior credible intervals.
@@ -366,13 +365,25 @@ This shows maximal differences consistent with our model and lets us constrain t
 ## Everything at once
 
 ```{r, fig.width=10, fig.height=7}
-plot_pairwise_differences(main_model_def, fit, data_for_prediction_BBSome, plot_types = "linerange_all")
+plot_pairwise_differences(main_model_def, fit, data_for_prediction_BBSome, plot_type = "linerange_all")
 
 ```
 
 Posterior 95% (thin) and 50% (thick) credible intervals for odds ratio for a phenotype given mutation in the gene on horizontal axis against the gene on the vertical axis. Color indicates the widest central posterior credible interval that does not include one. We deliberately not make any strong cutoff at 95% excluding zero or similar as the tail probabilities have high variance (e.g. where there is less data, one extra positive case could plausibly move this quantity from say 93% to 96%) . Odds ratio are shown on the log scale.
 
 This plot integrates the information shown in the plots above and some more.
+
+# LOF
+
+```{r}
+plot_lof_differences_estimates(fit, data_for_prediction_BBSome)
+plot_lof_differences_estimates(fit_base_model(models_base[["gene_source_lof_per_gene"]], data_long), data_for_prediction_BBSome)
+```
+
+
+# Evaluating conclusions
+
+TODO vzít z multiverse
 
 # Saving figures for publication
 
@@ -402,6 +413,7 @@ for(type in types) {
   })
 }
 ```
+
 
 # Extra inspection of the LIV phenotype
 

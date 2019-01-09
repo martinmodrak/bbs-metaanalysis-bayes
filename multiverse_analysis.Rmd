@@ -7,20 +7,16 @@ output:
 ---
 
 
-*This is Appendix 2 for the paper "Exploring the function of the BBSome using clinical data: Meta-analysis of genotype-phenotype associations in Bardet-Biedl Syndrome" The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes *
+*This is Appendix 3 for the paper "Exploring the function of the BBSome using clinical data: Meta-analysis of genotype-phenotype associations in Bardet-Biedl Syndrome" The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes *
 
 
-Text:
-- Upravit text o filtraci (vyrazene fenotypy) - nebo spustit jeste nekdy se vsemi feno...
-
-
-This appendix describes all Bayesian models we tried throughout this project. Further we discuss the reasoning behind our choice of model for the main analysis, in particular why between-study variability is crucial and cLOF useful while age, and sex can be omitted. Finally, we compute how the conclusions of the paper hold under all of the models.
+This appendix describes all Bayesian models we tried throughout this project. Further we discuss the reasoning behind our choice of model for the main analysis, in particular why between-study variability is crucial and certain loss of function (cLOF) useful while age, and sex can be omitted. Finally, we compute how the conclusions of the paper hold under all of the models.
 
 For historical reasons the feature of "certain loss of function" (cLOF) as discussed in the data is called just "lof" in most analysis code. This appendix will thus use "lof" and "cLOF" interchangeably. 
 
 # Model descriptions
 
-All models are Bayesian varying intercept logistic regressions using the `brms` package. Appendix 1 includes both accessible and complete mathematical description of the model we chose for the main analysis, which will not be repeated here. Generally all of the terms in the models are varying intercepts, i.e. the model partially pool the estimates for individual groups (genes, sources, ...) towards population mean to achieve more robust inference.
+All models are Bayesian varying intercept logistic regressions using the `brms` package. Appendix 2 (main analysis) includes both accessible and complete mathematical description of the model we chose for the main analysis, which will not be repeated here. Generally all of the terms in the models are varying intercepts, i.e. the model partially pool the estimates for individual groups (genes, sources, ...) towards population mean to achieve more robust inference.
 
 ```{r setup}
 library(rstan)
@@ -42,7 +38,7 @@ source(here("models_funcs.R"))
 source(here("plots.R"))
 
 ##PP Checks take time, so turn this off for quicker computation of the rest
-compute_pp_checks <- FALSE
+compute_pp_checks <- TRUE
 ```
 
 
@@ -112,7 +108,7 @@ fits_base <- models_base %>%
 
 Including age or sex in the base models is problematic as it involves tossing out `r round(100 * mean(is.na(data$age)))`% or `r round(100 * mean(is.na(data$Sex)))`% of data respectively. This results in wide posterior intervals and weak inferences. To try to ameliorate this we also tested running models on datasets with age and sex imputed, using multiple imputation via the `mice` package. We assume that both age and sex can be related to the functional group of the mutation and to each other. Involving further relations (e.g. individual genes) led to warnings from the `mice` package and we thus didn't use those.
 
-```{r mice_impute}
+```{r mice_impute, message=FALSE}
 set.seed(20181217)
 predictor_matrix <- matrix(0, nrow = 2, ncol = ncol(data))
 colnames(predictor_matrix) <- names(data)
@@ -130,7 +126,18 @@ if(!is.null(data_mice$loggedEvents)) {
 data_long_mice <- mice::complete(data_mice, "all") %>% map(data_long_from_data)
 ```
 
-The models differ in the formulas used, but all use the default priors and do not filter the dataset in any way.
+The imputed models differ in the formulas used, but all use the default priors and do not filter the dataset in any way.
+
+```{r}
+models_imputed %>% walk(function(def) {
+  cat(def$name,":\n\tformula:", as.character(def$formula)[1])
+  if(def$note != "") {
+    cat("\tNote:", def$note)
+  }
+  cat("\n\n")
+  #tibble(name = def$name, formula = as.character(def$formula)[1], filter = def$filter,  note = def$note)
+})
+```
 
 
 ```{r fit_imputed_models}
@@ -139,11 +146,16 @@ all_fits <- c(fits_base, fits_imputed)
 ```
 
 
+# Choosing the model for main analysis
+
+In general we use *posterior predictive checks* (PPCheck) to asses model fit. PPCheck is performed by predicting posterior distribution of possible outcomes implied by the fitted model. This distribution can then be compared to what is actually observed in the data and discrepancies can be noted and used to guide model expansion/selection. In our case we focus on the prevalance of positive phenotypes across various subdivisions of the data. Of prime interests are subdivisions *not* taken into account by a model - if the model explains groupings that were not included it is a sign that it works well. If the model consistently misestimates groups it is not aware of, it is an indication that such a group should be involved. We use the `bayesplot` package to perform PPChecks. See (Gabry et al. 2018, Visualisation in Bayesian workflow)[https://arxiv.org/abs/1709.01449] for a mor thorough discussion of PPChecks.
+
+In most models we assume phenotype correlations because the data were selected for containing at least two phenotypes and diagnosis criteria is based on having multiple phenotypes. Both of these processes could have introduced correlations. However the fitted correlations aren't conclusive and do not increase the explanatory power of the model (models with diffrent correlation structures are also included).
 
 
-# Between-study variability needs to be included
+## Between-study variability needs to be included
 
-Modelling between-study variability is simply a good practice for any metaanalysis.
+Modelling between-study variability is simply a good practice for any metaanalysis, but PPChecks can convince us that models ignoring it do not fit the data well. Let's start by looking at overall prevalance for studies with at least 10 patients and how the most basic model (`gene_only`, taking only the gene into account) fares:
 
 ```{r}
 pp_check_helper <- function(model_names, pp_check_types) {
@@ -160,41 +172,102 @@ pp_check_helper <- function(model_names, pp_check_types) {
 pp_check_helper("gene_only", "source_10")
 ```
 
-We see that the model is overly certain in its predictions and the credible intervals frequently miss the actual counts in a study. 11 / 25 sources have predictions not very consistent with data.
+Here the bars represents actual prevalance in the data, the dots the posterior mean for those subgroups and the lines posterior 95% credible interval. Note that we clump together all phenotypes for simplicity. We see that the model is overly certain in its predictions and the posterior credible intervals frequently miss the actual counts in a study. 11 / 25 sources have predictions not very consistent with data.
 
-This does not resolve when including cLOF or age/sex (here using the filtered model, as we don't really care)
+This does not resolve when including cLOF and/oror age and sex (here using the model filtered for age, as we don't really care about wide posterior intervals)
 
 ```{r}
 pp_check_helper("gene_filtered_age_sex", "source_10")
 ```
-6/14 off in gene_filtered_age_sex
+6/14 source are noticeably off in gene_filtered_age_sex
 
 ```{r}
 pp_check_helper("gene_lof_per_gene", "source_10")
 ```
 
-10/25 off gene_lof_per_gene
+10/25 sources are noticeably off gene_lof_per_gene
 
 ```{r}
 pp_check_helper("gene_lof_per_gene_filtered_age_sex", "source_10")
 ```
 
+5/14 sources are noticeably off for gene_lof_per_gene_filtered_age_sex
+
+Including source explicitly alleviates a large fraction (but not all) of the problems:
 
 ```{r}
 pp_check_helper("gene_source", "source_10")
 ```
 
-6/25 problematic in gene_source
+We see 6/25 sources problematic in gene_source. However including cLOF and source makes the fit good across all sources:
 
 ```{r}
 pp_check_helper("gene_source_lof", "source_10")
 ```
 
-Resolves when including cLOF as well.
+```{r}
+pp_check_helper("gene_source_lof", "source_10_lof")
+```
 
-# Between-study variability mostly explains age and sex differences
 
-# Between-study variability mostly explains loss-of-function differences
+It therefore seems that both source and cLOF are important factors.
+
+```{r}
+pp_check_helper("gene_source_filtered_lof", "source_10")
+```
+
+## Between-study variability mostly explains age and sex differences
+
+On the other hand age and sex differences don't necessarily need to be included, as they are sufficiently well explained by the `gene_source_lof` model. First let's look at overall prevalance by sex and age group:
+
+```{r}
+pp_check_helper("gene_source_lof", c("sex","age"))
+```
+Note that missing data are treated as a separate age category.
+
+No big problems in the bulk age/sex groups. We can also look at age and sex by individual phenotypes (we collapse some of the age groups to make the age + phenotype plot readable:
+
+```{r}
+pp_check_helper("gene_source_lof", c("sex_phenotype","age_phenotype"))
+```
+
+Once again only very minor problems (e.g age "20-39" for REN phenotype). We think those can be safely ignored.
+
+## Loss-of-function differences are of a relatively minor importance
+
+Using the most simple model, we see that cLOF difference are not well modelled for the CI, REP, REN and LIV phenotypes. 
+
+```{r}
+pp_check_helper("gene_only", "phenotype_lof")
+```
+
+This disappears when adding a per-phenotype cLOF term to the model (i.e. for a given phenotype the effect of cLOF is assumed equal across all mutations):
+
+```{r}
+pp_check_helper("gene_lof", c("phenotype_lof","gene_lof"))
+```
+
+```{r}
+pp_check_helper("gene_lof_per_gene", c("phenotype_lof","gene_lof"))
+```
+
+While adding source as a covariate ameliorates the problems with cLOF (it remains problematic only for REN and LIV phenotypes)
+
+```{r}
+pp_check_helper("gene_source", c("phenotype_lof","gene_lof"))
+```
+
+The problem is mitigated when both source and cLOF are included
+
+```{r}
+pp_check_helper("gene_source_lof", c("phenotype_lof","gene_lof"))
+```
+
+Having cLOF coefficient differ per gene does not bring noticeable improvements (TODO check):
+
+```{r}
+pp_check_helper("gene_source_lof_per_gene", c("phenotype_lof","gene_lof"))
+```
 
 ## PP Check for cLOF
 
@@ -240,42 +313,25 @@ The comparison between `gene_source` and `gene_lof_by_gene` is not clear as for 
 
 Once again there is a minor advantage in filtering out LOF data while there is no advantage to including LOF in the model. There are at least two possible explanations: when filtering for LOF, there is much less data, but almost the same number of parameters, so the model can accommodate (or even slightly overfit) the data. Another plausible explanation is that there is some important variability among the patients with mutations that are not certainly LOF which hinder fitting.  We however couldn't devise a defensible way to further split the mutations that are not certainly LOF. 
 
-```{r, fig.width=10, fig.height=7}
-plot_pairwise_differences(models_base$gene_source_filtered_lof, fits_base$gene_source_filtered_lof, data_for_prediction_base_model(models_base$gene_source_filtered_lof, genes_to_show, phenotypes_to_show) %>% filter_for_BBSome())
+
+## Very narrow priors hinder model fit
+
+We can compare the effect of widening (to $N(0,5)$) or narrowing (to $N(0,1)$ and $N(0,0.1)$) the priors for sd of genes (as those are our primary outcomes). TODO
+
+```{r}
+pp_check_helper(c("gene_source_wide","gene_source_narrow","gene_source_very_narrow"), c("gene"))
 ```
 
 
-TODO
+## Model choice verdict
 
-In most cases, the loss of function does not make for a big difference in predictions. This is because there is no strong distinction in the data itself:
+We've shown that source has to be included and there is an advantage in including cLOF per phenotype, but not much improvement when including cLOF per phenotype adn gene. Since the `gene_source_lof_per_gene` model is too flexible for the limited amount of data (results in very wide posterior intervals, spanning odds ratio up to 10000), we think `gene_source_lof` is a better choice.
 
-```{r, fig.width=8, fig.height=4}
-lof_data_plot <- data_long %>% 
-  group_by(source, phenotype, gene, loss_of_function) %>% 
-  filter(functional_group == "BBSome", gene != "BBS18") %>%
-  summarise(n_patients = length(phenotype_value), proportion = sum(phenotype_value) / n_patients) %>%
-  ggplot(aes(x = gene, y = proportion, size = n_patients, color = loss_of_function)) +
-  geom_jitter(alpha = 0.3, height = 0, width = 0.2) +
-  facet_wrap(~phenotype, nrow = 2) +
-  scale_y_continuous("Proportion of phenotype") +
-  scale_size_continuous(range = c(0.5,4)) +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5))
+We've further shown that unless the priors are set extremely tight, they do not influence the results much. We therefore conclude that `gene_source_lof` is the best model, however the next section shows that except for some of the fits that can be shown to be problematic (e.g. that ignore source or the very narrow prior) the verdict on our main conclusions does not really change.
 
-lof_data_plot
-```
-
-# Some models are a bad fit for the data
-
-gene_only
-gene_only_filtered_lof
-gene_lof
-gene_lof_per_gene
-gene_source_lof ??
-very narrow
 
 # Robustness of conclusions to model choice
 
-Definovat min. klin. relevantni efekt
 
 ```{r}
 min_interesting_effect <- 2
@@ -285,8 +341,9 @@ min_bbsome_pairwise_for_diffs <- 5
 evaluators <- list()
 ```
 
+There is some flexibility in defining the exact model configurations consistent with a given conclusion. In general, when speaking whether there is or isn't a difference, the Bayesian model will always say "yes there is a (possibly small) difference" - the posterior probability of a difference of exactly 0 is 0. Instead we choose a threshold of a "clinically relevant effect", which for us is odds ratio outside of (`r 1/min_interesting_effect`,`r min_interesting_effect`).
 
-
+The exact definition of the individual conclusions follow.
 
 ```{r}
 n_genes_lof_different <- 5
@@ -323,17 +380,17 @@ evaluator_lof <- function(def, fit) {
 }
 ```
   
-*	The data suggest a difference between the severity of BBS in patients with mutations in different functional groups of genes.
-  * Measured as posterior probability, that there is clinically relevant effect for at least `r min_phenotypes_for_diffs` phenotypes for at least 1/2 of pairwise gene comparisons.
+*	The data suggest that BBS3 has lower severity than mutations in different functional groups of genes.
+  * Measured as posterior probability, that odds ratio is < 1 for at least `r min_phenotypes_for_diffs` phenotypes for at least 1/2 of pairwise gene comparisons.
   
 ```{r}
-evaluator_functional_groups_differ <- function(group1, group2) {
+evaluator_functional_groups_lower <- function(group1, group2) {
   function(samples_diff, samples_diff_bbsome, samples_prediction_bbsome, samples_linear_bbsome) {
-    target_column_name = paste(bbs_labeller(group1),"and",bbs_labeller(group2),"differ")
+    target_column_name = paste(bbs_labeller(group1),"less severe than",bbs_labeller(group2))
     samples_diff %>% 
       filter(functional_group.x == group1, functional_group.y == group2) %>%
       group_by(sample, phenotype) %>%
-      summarise(enough_pairwise_relevant = mean(is_relevant) >= 1/2) %>%
+      summarise(enough_pairwise_relevant = mean(odds_ratio < 1) >= 1/2) %>%
       group_by(sample) %>%
       summarise(enough_phenotype_relevant = sum(enough_pairwise_relevant) >= min_phenotypes_for_diffs) %>%
       ungroup() %>%
@@ -341,8 +398,8 @@ evaluator_functional_groups_differ <- function(group1, group2) {
   }
 }
 
-evaluators[["bbs3_vs_bbsome"]] <- evaluator_functional_groups_differ("BBS03","BBSome")
-evaluators[["bbs3_vs_chaperonins"]] <- evaluator_functional_groups_differ("BBS03","Chaperonins")
+evaluators[["bbs3_vs_bbsome"]] <- evaluator_functional_groups_lower("BBS03","BBSome")
+evaluators[["bbs3_vs_chaperonins"]] <- evaluator_functional_groups_lower("BBS03","Chaperonins")
 ```
 *	The data suggest a difference between the severity of BBS in patients with mutations in different BBSome subunits.
   * Measured as posterior probability, that there is clinically relevant effect for at least `r min_phenotypes_for_diffs` phenotypes for at least `r min_bbsome_pairwise_for_diffs` pairwise comparisons. 
@@ -511,7 +568,7 @@ evaluators[["LIVER_BBS4_all"]] <-  evaluator_prob_group_diff_all("LIV", paste0("
 
 
 ```{r}
-models_for_test <- all_models[c("gene_source","gene_source_filtered_lof","gene_imputed_age_sex")]
+models_for_test <- all_models[c("gene_source_lof","gene_source_filtered_lof","gene_imputed_age_sex")]
 
 evaluation <- all_models %>% 
 #evaluation <- models_for_test %>%
@@ -561,10 +618,11 @@ freq_conclusions <- freq_conclusions %>%
 
 ```{r, fig.width = 8, fig.height = 4.5}
 nice_model_name <- function(x)  {
-  x %>% gsub("only","none", .) %>% gsub("gene_","",.) %>% gsub("filtered_","filtered ", .) %>%
-    gsub("very_narrow","very narrow", .) %>% 
+  x %>% gsub("only","none", .) %>% 
     gsub("lof_per_gene","cLOF (by gene)", .) %>% 
     gsub("lof","cLOF", .) %>% 
+    gsub("gene_","",.) %>% gsub("filtered_","filtered ", .) %>%
+    gsub("very_narrow","very narrow", .) %>% 
     gsub("cor"," corr.", .) %>% 
     gsub("imputed_","imputed ", .) %>%  gsub("_"," + ", .)
 }

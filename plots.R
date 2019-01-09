@@ -64,9 +64,15 @@ run_pp_checks <- function(model_def, fit, data_long,
        small_labels
      ) %>% out_func
   }
+  filter_10 <- data %>% group_by(source) %>% mutate(include = length(unique(ID)) >= 10) %>% pull(include)
   if("source_10" %in% types) {
-    filter_10 <- data %>% group_by(source) %>% mutate(include = length(unique(ID)) >= 10) %>% pull(include)
     (my_ppc_bars_grouped(data$phenotype_value[filter_10], predicted[, filter_10], group = data$source[filter_10]) + 
+       ggtitle(paste0("PPCheck sources with >= 10 patients for ", model_def$name)) +
+       small_labels
+    ) %>% out_func
+  }
+  if("source_10_lof" %in% types) {
+    (my_ppc_bars_grouped(data$phenotype_value[filter_10], predicted[, filter_10], group = interaction(data$loss_of_function[filter_10], data$source[filter_10])) + 
        ggtitle(paste0("PPCheck sources with >= 10 patients for ", model_def$name)) +
        small_labels
     ) %>% out_func
@@ -106,7 +112,8 @@ run_pp_checks <- function(model_def, fit, data_long,
   }
   
   if("age_phenotype" %in% types) {
-    (my_ppc_bars_grouped(observed, predicted, group = interaction(age_fct, data$phenotype)) + ggtitle(paste0("PPCheck age + phenotype for ", model_def$name))) %>% out_func
+    age_fct_collapsed <- fct_collapse(age_fct, `0-19` = c("0-9","10-19"), `20-39` = c("20-29","30-39"), `40+` = c("40-49","50-59","60+"))
+    (my_ppc_bars_grouped(observed, predicted, group = interaction(age_fct_collapsed, data$phenotype)) + ggtitle(paste0("PPCheck age + phenotype for ", model_def$name))) %>% out_func
   }
 
   if("gene_phenotype" %in% types) {
@@ -473,7 +480,7 @@ plot_pairwise_differences <- function(model_def, fit, data_for_prediction,
 
 plot_lof_differences_estimates <- function(fit, data_for_prediction, genes_to_show = unique(data_for_prediction$gene), group_title = "Gene") {
   
-  get_samples_lof_diff(fit, data_for_prediction) %>%
+  data_to_plot <- get_samples_lof_diff(fit, data_for_prediction) %>%
     group_by(phenotype, group, functional_group) %>%
     summarise(Estimate = median(odds_ratio), 
               lower = quantile(odds_ratio, posterior_interval_bounds[1]),

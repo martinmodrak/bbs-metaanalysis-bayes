@@ -79,18 +79,34 @@ models_base <- list(
     additional_components = c("source"), filter = "none"
     ),
   
-  gene_source_filtered_lof = list(
-    formula = formula_gene_source, 
-    priors = default_priors, 
-    note = "",
-    additional_components = c("source"), filter = "lof"
-    ),
 
   gene_source_lof =  list(
     formula = formula_gene_source_lof, 
     priors = default_priors, 
     note = "",
     additional_components = c("source", "lof"), filter = "none"
+  ),
+  
+  gene_source_lof_wide = list(
+    formula = formula_gene_source_lof, 
+    priors = c(prior(normal(0,5), class = Intercept), prior(normal(0,5), class = sd)), 
+    note = "special priors",
+    additional_components = c("source","lof"), filter = "none"
+  ),
+  
+
+  gene_source_filtered_lof = list(
+    formula = formula_gene_source, 
+    priors = default_priors, 
+    note = "",
+    additional_components = c("source"), filter = "lof"
+  ),
+
+  gene_source_filtered_lof_wide = list(
+    formula = formula_gene_source, 
+    priors = c(prior(normal(0,5), class = Intercept), prior(normal(0,5), class = sd)), 
+    note = "special priors",
+    additional_components = c("source"), filter = "lof"
   ),
 
   gene_source_lof_per_gene =  list(
