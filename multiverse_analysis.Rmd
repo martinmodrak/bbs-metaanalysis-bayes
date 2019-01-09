@@ -1,28 +1,26 @@
 ---
-title: "Additional multiverse analysis"
-output: html_notebook
+title: "Additional multiverse analysis of BBS phenotypes"
+author: "Martin Modrák"
+date: '`r format(Sys.time(), "%d %B, %Y")`'
+output:
+  html_document: default
 ---
 
-TODO: 
-- Rozdily v RD zmizi pri imputation Sex
-- min_probable_OR ma divný scale
-- podivat se na "divne" geny (případně vyhodit)
-- lof -> cLOF
+
+*This is Appendix 2 for the paper "Exploring the function of the BBSome using clinical data: Meta-analysis of genotype-phenotype associations in Bardet-Biedl Syndrome" The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes *
+
 
 Text:
 - Upravit text o filtraci (vyrazene fenotypy) - nebo spustit jeste nekdy se vsemi feno...
 
 
-This describes all Bayesian models we tried throughout this project. 
+This appendix describes all Bayesian models we tried throughout this project. Further we discuss the reasoning behind our choice of model for the main analysis, in particular why between-study variability is crucial and cLOF useful while age, and sex can be omitted. Finally, we compute how the conclusions of the paper hold under all of the models.
 
-Further we discuss the reasoning behind our choice of model for the main analysis, in particular why between-study variability is crucial while age, sex and loss of function can be omitted.
+For historical reasons the feature of "certain loss of function" (cLOF) as discussed in the data is called just "lof" in most analysis code. This appendix will thus use "lof" and "cLOF" interchangeably. 
 
+# Model descriptions
 
-Finally we compute how the conclusions of the paper hold under all of the models.
-
-# Model description
-
-All models are logistic regression using `brms`.
+All models are Bayesian varying intercept logistic regressions using the `brms` package. Appendix 1 includes both accessible and complete mathematical description of the model we chose for the main analysis, which will not be repeated here. Generally all of the terms in the models are varying intercepts, i.e. the model partially pool the estimates for individual groups (genes, sources, ...) towards population mean to achieve more robust inference.
 
 ```{r setup}
 library(rstan)
@@ -56,7 +54,7 @@ data_long <- data_long_from_data(data)
 
 ## Base models
 
-Base models are those that work with (a subset of) the original dataset, without any imputation. The models are defined in file `models.R`. They differ in the model formula, subsets of the dataset they use and priors for model coefficients. Here is the list of base models.
+Base models are those that work with (a subset of) the original dataset, without any imputation. The models are defined in file `models.R`. They differ in the model formula, subsets of the dataset they use and priors for model coefficients. The syntax for formulas in `brms` is described (in brms manual)[https://rdrr.io/cran/brms/man/brmsformula.html] and will not be explained here. The list of base models follows:
 
 ```{r}
 models_base %>% walk(function(def) {
@@ -112,7 +110,7 @@ fits_base <- models_base %>%
 
 ## Imputation with mice
 
-Including age or sex in the base models is problematic as it involves tossing out `r round(100 * mean(is.na(data$age)))`% or `r round(100 * mean(is.na(data$Sex)))`% of data respectively. This results in wide posterior intervals and weak inferences. To try to ameliorate this we also tested running models on datasets with age and sex imputed, using multiple imputation via the `mice` package. We assume that both age and sex can be realted to the functional group of the mutation and to each other. Involving further relations (e.g. individual genes) led to warnings from the `mice` package and we thus didn't use those.
+Including age or sex in the base models is problematic as it involves tossing out `r round(100 * mean(is.na(data$age)))`% or `r round(100 * mean(is.na(data$Sex)))`% of data respectively. This results in wide posterior intervals and weak inferences. To try to ameliorate this we also tested running models on datasets with age and sex imputed, using multiple imputation via the `mice` package. We assume that both age and sex can be related to the functional group of the mutation and to each other. Involving further relations (e.g. individual genes) led to warnings from the `mice` package and we thus didn't use those.
 
 ```{r mice_impute}
 set.seed(20181217)
@@ -134,7 +132,6 @@ data_long_mice <- mice::complete(data_mice, "all") %>% map(data_long_from_data)
 
 The models differ in the formulas used, but all use the default priors and do not filter the dataset in any way.
 
-## Fit the imputed models
 
 ```{r fit_imputed_models}
 fits_imputed <- models_imputed %>% map(function(def) { fit_imputed_model(def, data_long_mice)})
@@ -146,7 +143,7 @@ all_fits <- c(fits_base, fits_imputed)
 
 # Between-study variability needs to be included
 
-Including between-study variability is simply a good practice.
+Modelling between-study variability is simply a good practice for any metaanalysis.
 
 ```{r}
 pp_check_helper <- function(model_names, pp_check_types) {
