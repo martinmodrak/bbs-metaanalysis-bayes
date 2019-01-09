@@ -8,7 +8,8 @@ base_theme <- theme(
                     axis.text = element_text(size = base_theme_font_size), 
                     legend.title = element_text(size = base_theme_font_size + 1),
                     legend.text = element_text(size = base_theme_font_size),
-                    strip.text = element_text(size = base_theme_font_size))
+                    strip.text = element_text(size = base_theme_font_size),
+                    plot.title = element_text(size = base_theme_font_size + 2))
 
 scale_color_functional_group <- scale_color_manual(values = c(BBS03 = "#f8766dff", BBSome = "#5f8dd3ff", Chaperonins = "#aa8800ff"))
 

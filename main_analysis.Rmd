@@ -3,11 +3,12 @@ title: "Bayesian metaanalysis of BBS phenotypes"
 author: "Martin Modrák"
 date: '`r format(Sys.time(), "%d %B, %Y")`'
 output:
-  html_document: default
+  pdf_document: 
+     toc: true
 ---
 
 ```{r setup, echo=FALSE, message = FALSE}
-knitr::opts_chunk$set(echo=FALSE)
+knitr::opts_chunk$set(echo=FALSE, cache = TRUE) #TODO remove cache once tweaks are done
 library(rstan)
 library(brms)
 options(mc.cores = parallel::detectCores())
@@ -37,16 +38,10 @@ if(!dir.exists(here(stored_fits_dir))) {
 
 ```
 
-*This is Appendix 1 for the paper "Exploring the function of the BBSome using clinical data: Meta-analysis of genotype-phenotype associations in Bardet-Biedl Syndrome". The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes *
+*This is Appendix 2 for the paper "Exploring the function of the BBSome using clinical data: Meta-analysis of genotype-phenotype associations in Bardet-Biedl Syndrome". The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes *
 
 
-TODO:
-- číslovat obrázky
-Text:
-- Upravit text o filtraci (vyrazene fenotypy) - nebo spustit jeste nekdy se vsemi feno...
-
-
-This document describes the Bayesian analysis reported in the main manuscript. A separate supplementary file (TODO add ID of the file) describes the multiverse analysis where we test how the results change with different modelling assumptions. All references to "multiverse analysis" in this text point to this document.
+This document describes the Bayesian analysis reported in the main manuscript. A separate supplementary file (Appendix 3) describes the multiverse analysis where we test how the results change with different modelling assumptions. All references to "multiverse analysis" in this text point to this document.
 
 # The data
 
@@ -198,13 +193,13 @@ studies_less_than_5 <- round(mean(mut_in_study$count < 5) * 100)
 The red line shows the true prevalance of a phenotype (assuming it is the same across multiple studies). Each point shows the observed prevalence of a single possible realization of a study. We see that the observed prevalence can differ substantially from the true value and that the spread decreases with increasing $n$. In our data we can't however expect large $n$ as the biggest $n$ we have is (`r max_mut_in_study$source`) with `r max_mut_in_study$count` patients having mutation in `r max_mut_in_study$gene` and in `r studies_less_than_5`% of cases there are less than 5 patients with a given mutation in the same study. 
 Also note that the observed values are clustered at discrete "levels" because e.g., among 5 patients you only can have prevalence of 0.2 or 0.4 and nothing in between. Further, you can see that with high prevalence, there is less variation in the observed prevalence.
 
-For mathematical convenience, the model does not work with prevalence directly, but with *odds*. Odds are just another way to express prevalence - for example, when the prevalence is $20%$, we expect one patients to exhibit the phenotype for each four patients not exhibiting the phenotype, leading to odds $1:4$ or $0.25$ and log odds (base 10 here) of roughly $-0.6$. Unlike prevalence, which is constrained between 0 and 1,  odds can be any non-negative number. 
+For mathematical convenience, the model does not work with prevalence directly, but with *odds*. Odds are just another way to express prevalence - for example, when the prevalence is $20\%$, we expect one patients to exhibit the phenotype for each four patients not exhibiting the phenotype, leading to odds $1:4$ or $0.25$ and log odds (base 10 here) of roughly $-0.6$. Unlike prevalence, which is constrained between 0 and 1,  odds can be any non-negative number. 
 
 Most of the results of the model are reported as comparisons of odds in different populations. For this we use the ratio of the corresponding odds. E.g. when the odds ratio is 2, we expect the first population to have twice as much patients exhibiting the phenotype for each healthy patient than the second population.
 
 Technically the model works with the logarithm of odds. The logit function trasnforms a probability (prevalence) to log odds, hence the logit "link" used in the model. What is the linear part?
 
-Our model assumes that the true odds of a phenotype is a function of three numbers (*coefficients*): the overall odds of the phenotype in the population, a modifier for the gene the patient has damaged and a modifier for the study the patient is enrolled in. These three numbers are multiplied to arrive at the final odds for the patient. This means that while the odds of a phenotype are allowed to vary between genes and the overall rate of a phenotype may vary between studies, the odds ratio of different genes is the same across all studies. Let's look at an example:
+Our model assumes that the true odds of a phenotype is a function of four numbers (*coefficients*): the overall odds of the phenotype in the population, a modifier for the gene the patient has damaged and a modifier for the study the patient is enrolled in. One additional modifier is added when the mutation is a certain loss-of-function (cLOF). These four numbers are multiplied to arrive at the final odds for the patient. Assuming only cLOF mutations for simplicity, this means that () while the odds of a phenotype are allowed to vary between genes and the overall rate of a phenotype may vary between studies, the odds ratio of different genes is the same across all studies. Let's look at an example:
 
 ```{r}
 set.seed(1211)
@@ -219,6 +214,8 @@ tibble(gene = paste("Gene",1:3), odds = c(1, 5, 3)) %>% crossing(tibble(source =
 Above on the leftmost panel we see that the two studies differ in the odds of the phenotype for each gene, but the ratio of odds for Gene 1 to Gene 2 (and 3) is the same in both studies (since the odds are shown on log scale this manifests as a constant gap between the two lines). This type of between study variation is allowed. On the other two panels, the odds ratio for Gene 1 to Gene 2 (and 3) differs between studies - this type of variation is not allowed by the model. 
 
 Another way to describe the allowed case is that, for both studies a mutation in Gene 2 makes a patient five times more likely to exhibit the phenotype than a patient with a mutation in Gene 1, although the base rate of the phenotype may vary between studies.
+
+The cLOF coefficient is held constant for all genes in a given phenotype, meaning that odds for any given phenotype are multiplied by a small number when the mutation is cLOF. Once again this means that relative odds are the same amongs cLOF and other mutations, but absolute odds can be higher (or lower) in cLOF mutations.
 
 This is the "linear" part of the model - we multiply odds, which is the same as adding the logarithm of the odds and addition is a neatly linear thing. 
 
@@ -239,26 +236,28 @@ For the model, we expand the data into long form, i.e. each row in the dataset c
 
 ```{r}
 main_model_def <- models_base$gene_source_lof
-main_model_def$formula
+cat(strwrap(as.character(main_model_def$formula)[1], width = 80, prefix = "\n\t", initial = "" ))
+
 ```
 
 this can be expressed in mathematical notation as:
 
-$$
-\begin{align}
+\[
+\begin{aligned}
 Y_i &\sim Bernoulli(\mu_i) \\
-\mathrm{logit}(\mu_i) &= \alpha + \beta^1_{p_i} + \beta^2_{p_i,g_i} + \beta^3_{p_i,s_i}
-\end{align}
-$$
+\mathrm{logit}(\mu_i) &= \alpha + \beta^1_{p_i} + \beta^2_{p_i,g_i} + \beta^3_{p_i,s_i} + c_i\beta^4_{p_i} 
+\end{aligned}
+\]
 
-Where $p_i \in \{1, ..., P \}$ is the index of the phenotype for $i$-th row, $g_i \in \{1,...,G\}$ is mutated gene for $i$-th row and $s_i \in \{1,...,S\}$ is the index of the source study for $i$-th row. $\alpha$ is the intercept and $\beta^1, \beta^2$ and $\beta^3$ model the overall phenotype prevalence,  phenotype prevalance specific to a given mutation and between-study variability in phenotype prevalence respectively.
+Where $p_i \in \{1, ..., P \}$ is the index of the phenotype for $i$-th row, $g_i \in \{1,...,G\}$ is mutated gene for $i$-th row and $s_i \in \{1,...,S\}$ is the index of the source study for $i$-th row. $c_i$ is 1 when the mutation on the $i$-th row is cLOF and 0 otherwise.  $\alpha$ is the intercept and $\beta^1, \beta^2$ and $\beta^3$ model the overall phenotype prevalence,  phenotype prevalance specific to a given mutation and between-study variability in phenotype prevalence respectively. $\beta^4$ models the phenotype-specific effect of cLOF.
 
 Note that this is very similar to running a separate regression for each phenotype, with two exceptions: the overall intercept $\alpha$ is explicitly shared between phenotypes and the structure of the priors introduces some information flow between the other coefficients.
 
 The priors we use for the parameters are:
 
-$$
-\begin{align}
+
+\[
+\begin{aligned}
 \alpha &\sim N(0, 2) \\
 \beta^1 &\sim N(0, \sigma_1) \\
 \sigma_1 &\sim N(0, 2) \\
@@ -269,9 +268,11 @@ $$
 \sigma_{2,p} &\sim N(0, 2) \\
 
 \beta^3_{p,s} &\sim  N(0, \sigma_{3,p})\\
-\sigma_{3,p} &\sim N(0, 2)
-\end{align}
-$$
+\sigma_{3,p} &\sim N(0, 2)\\
+
+\beta^4_{p} &\sim N(0,2)
+\end{aligned}
+\]
 
 Note that the prior on $\beta^1$ is $P$-dimensional multivariete normal $\mathcal{N}_P$, explicitly modelling the correlation $\bar{\boldsymbol{\Sigma}}$ between the prevalence of individual phenotypes and per-phenotype variance $\sigma_{2,p}$, while the other priors are univariete normal.
 
@@ -292,7 +293,9 @@ data_for_prediction <- data_for_prediction_base_model(main_model_def, genes_to_s
 data_for_prediction_BBSome <- data_for_prediction %>% filter(functional_group_for_gene(gene) == "BBSome", gene != "BBS18")
 ```
 
-The fitted model parameters themselves are however hard to interpret, as they operate on log odds scale. It is also hard to say how to handle the between-study variability of coefficients. And this variability  is substantial - note that the `sd` parameters under `~source` (corresponding to $\sigma_3$) admit ranges from $1.11$ to $5.09$, so the odds of a phenotype, given a mutation can plausibly differ between studies by $1.96 \times \pm 1.11 = \pm 2.16$ to $1.96 \times \pm 5.09 = \pm 9.97$ _on the log scale_ (95% of mass of a normal distribution is within $1.96 \times \sigma$ from the mean).
+TODO - check/update numbers
+
+The fitted model parameters themselves are however hard to interpret, as they operate on log odds scale. It is also hard to say how to handle the between-study variability of coefficients. And this variability  is substantial - note that the `sd` parameters under `~source` (corresponding to $\sigma_3$) admit ranges from $1.11$ to $5.09$, so the odds of a phenotype, given a mutation can plausibly differ between studies by $1.96 \times \pm 1.11 = \pm 2.16$ to $1.96 \times \pm 5.09 = \pm 9.97$ _on the log scale_ (95% of mass of a normal distribution is within $1.96 \times \sigma$ from the mean). 
 
 Instead we will focus on model predictions. In particular, the results we report can be interpreted as if a new study is drawn at random from the same population of studies as we used (i.e. matching all the inclusion criteria) and we directly observe true odds of all phenotypes for all mutations in this study. That is, the predictions do include between-study variability, our uncertainty about the population of studies, our uncertainty about overall prevalence of the individual phenotypes, our uncertainty about the strength of links between mutations and phenotypes and our uncertainty about correlations between the presence of individual phenotypes. The predictions do NOT include the sampling uncertainty of the hypothethical new study. For example when the hypothetical study has the true odds of a phenotype, given a mutation in BBS12, equal to $1:2$ ($0.5$), a study on 20 patients can easily observe odds of $3:17$ ($0.18$) or $11:9$ ($1.22$) simply due to chance, but we will treat the hypothetical study here as having odds of $0.5$ and ignore this additional noise in our results.
 
@@ -375,19 +378,21 @@ This plot integrates the information shown in the plots above and some more.
 
 # LOF
 
+What is the effect of loss of function?
+
 ```{r}
-plot_lof_differences_estimates(fit, data_for_prediction_BBSome)
-plot_lof_differences_estimates(fit_base_model(models_base[["gene_source_lof_per_gene"]], data_long), data_for_prediction_BBSome)
+#TODO
 ```
 
 
 # Evaluating conclusions
 
+The code to evaluate individual conclusions is in the file `conclusions.R`, below is a brief description of those.
+
 TODO vzít z multiverse
 
-# Saving figures for publication
 
-```{r}
+```{r saving_figures_for_publication}
 std_width = 8
 std_height = 4
 img_path = here("tmp_pics")
@@ -404,20 +409,21 @@ for(type in types) {
   
   differences_chaperonins_plot %>% ggsave(paste0("chaperonins_overall", type), plot = ., path = img_path,height = std_height, width = std_width)
   
-  plot_pairwise_differences(main_model_def, fit, data_for_prediction_BBSome, plot_types = c("heatmap_min", "heatmap_max"), out_func = function(name, plot) {
-    ggsave(paste0(name, type), plot = plot, path = img_path,height = std_height, width = std_width)
-  })
-  
-  plot_pairwise_differences(main_model_def, fit, data_for_prediction_BBSome, plot_types = "linerange_all", out_func = function(name, plot) {
-    ggsave(paste0(name, type), plot = plot, path = img_path,height = 7, width = 10)
-  })
+  plot_pairwise_differences(main_model_def, fit, data_for_prediction_BBSome, plot_type = "heatmap_min") %>%
+    ggsave(paste0("heatmap_min", type), plot = ., path = img_path,height = std_height, width = std_width)
+
+  plot_pairwise_differences(main_model_def, fit, data_for_prediction_BBSome, plot_type = "heatmap_max") %>%
+    ggsave(paste0("heatmap_max", type), plot = ., path = img_path,height = std_height, width = std_width)
+
+  plot_pairwise_differences(main_model_def, fit, data_for_prediction_BBSome, plot_type = "linerange_all") %>%
+    ggsave(paste0("linerange_all", type), plot = ., path = img_path,height = 7, width = 10)
 }
 ```
 
 
 # Extra inspection of the LIV phenotype
 
-For the LIV phenotype the frequentist analysis disagrees with the Bayesian analysis presented here (TODO: check that the final paper says that). In particular, the frequentist analysis shows BBS3 as lest likely to result in LIV and Chaperonins as most likely, while the analysis shown here reports exactly opposite trend. First let's look at aggregate frequencies of LIV phenotype:
+For the LIV phenotype the frequentist analysis disagrees with the Bayesian analysis presented here. In particular, the frequentist analysis shows BBS3 as lest likely to result in LIV and Chaperonins as most likely, while the analysis shown here reports exactly opposite trend. First let's look at aggregate frequencies of LIV phenotype:
 
 ```{r}
 data_long %>% filter(phenotype == "LIV") %>% group_by(functional_group) %>%
@@ -456,7 +462,7 @@ For a complete picture, let's look at pairwise differences between the 3 most co
 data_for_prediction_LIV <- tibble(gene = c("BBS1", "BBS2", "BBS4", "BBS3", "BBS6", "BBS10", "BBS12"), source = "new_source", loss_of_function_certain = 1) %>%
     crossing(tibble(phenotype = phenotypes_to_show))
 
-plot_pairwise_differences(main_model_def, fit, data_for_prediction_LIV, plot_types = "linerange_all")
+plot_pairwise_differences(main_model_def, fit, data_for_prediction_LIV, plot_type = "linerange_all")
 
 ```
 

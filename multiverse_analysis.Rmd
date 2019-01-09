@@ -3,7 +3,8 @@ title: "Additional multiverse analysis of BBS phenotypes"
 author: "Martin Modrák"
 date: '`r format(Sys.time(), "%d %B, %Y")`'
 output:
-  html_document: default
+  pdf_document: 
+    toc: true
 ---
 
 
@@ -18,7 +19,8 @@ For historical reasons the feature of "certain loss of function" (cLOF) as discu
 
 All models are Bayesian varying intercept logistic regressions using the `brms` package. Appendix 2 (main analysis) includes both accessible and complete mathematical description of the model we chose for the main analysis, which will not be repeated here. Generally all of the terms in the models are varying intercepts, i.e. the model partially pool the estimates for individual groups (genes, sources, ...) towards population mean to achieve more robust inference.
 
-```{r setup}
+```{r setup, echo=FALSE, message = FALSE}
+knitr::opts_chunk$set(echo=FALSE, cache = TRUE)
 library(rstan)
 library(brms)
 options(mc.cores = parallel::detectCores())
@@ -54,7 +56,7 @@ Base models are those that work with (a subset of) the original dataset, without
 
 ```{r}
 models_base %>% walk(function(def) {
-  cat(def$name,":\n\tformula:", as.character(def$formula)[1], "\n\tdata filter: ", def$filter)
+  cat(def$name,":\n\tformula:", strwrap(as.character(def$formula)[1], width = 80, prefix = "\n\t", initial = "" ), "\n\tdata filter: ", def$filter)
   if(def$note != "") {
     cat("\tNote:", def$note)
   }
@@ -73,42 +75,11 @@ fits_base <- models_base %>%
 ```
 
 
-```{r}
-# data_for_prediction_gene_only <- tibble(gene = genes_to_show) %>%
-#     crossing(tibble(phenotype = phenotypes_to_show)) %>% mutate(functional_group = functional_group_for_gene(gene))
-# 
-# data_for_prediction_gene_only_BBSome <- data_for_prediction_gene_only %>% filter(functional_group_for_gene(gene) == "BBSome", gene != "BBS18")
-# 
-# 
-# data_for_prediction_gene_source <- tibble(gene = genes_to_show, source = "new_source") %>%
-#     crossing(tibble(phenotype = phenotypes_to_show)) %>% mutate(functional_group = functional_group_for_gene(gene))
-# 
-# data_for_prediction_gene_source_BBSome <- data_for_prediction_gene_source %>% filter(functional_group_for_gene(gene) == "BBSome", gene != "BBS18")
-# 
-# data_long_filter_lof <- data_long %>% filter(loss_of_function == "certain")
-# 
-# data_for_prediction_gene_source_lof <- tibble(gene = genes_to_show, source = "new_source", loss_of_function_certain = 1) %>%
-#     crossing(tibble(phenotype = phenotypes_to_show)) %>% mutate(functional_group = functional_group_for_gene(gene))
-# 
-# plot_pairwise_differences(fit_gene_source_age_imputed, data_for_prediction_gene_source_BBSome %>% crossing(age_std_for_model = age_transform(c(10,30,50))))
-# 
-# plot_pairwise_differences(fit_gene_source_age_sex_imputed, data_for_prediction_gene_source_BBSome %>% crossing(tibble(Sex = c("M","F"))) %>% crossing(age_std_for_model = age_transform(c(10,30,50))))
-
-```
-
-```{r}
-# fit <- fit_base_model(models_base$gene_source_filtered_sex, data_long)
-# data_for_prediction <- data_for_prediction_base_model(models_base$gene_source_filtered_age, genes_to_show, phenotypes_to_show)
-# 
-# plot_gene_phenotype_differences_estimates(fit, data_for_prediction)
-```
-
-
 ## Imputation with mice
 
 Including age or sex in the base models is problematic as it involves tossing out `r round(100 * mean(is.na(data$age)))`% or `r round(100 * mean(is.na(data$Sex)))`% of data respectively. This results in wide posterior intervals and weak inferences. To try to ameliorate this we also tested running models on datasets with age and sex imputed, using multiple imputation via the `mice` package. We assume that both age and sex can be related to the functional group of the mutation and to each other. Involving further relations (e.g. individual genes) led to warnings from the `mice` package and we thus didn't use those.
 
-```{r mice_impute, message=FALSE}
+```{r mice_impute, message=FALSE, echo=FALSE, results="hide"}
 set.seed(20181217)
 predictor_matrix <- matrix(0, nrow = 2, ncol = ncol(data))
 colnames(predictor_matrix) <- names(data)
@@ -130,7 +101,7 @@ The imputed models differ in the formulas used, but all use the default priors a
 
 ```{r}
 models_imputed %>% walk(function(def) {
-  cat(def$name,":\n\tformula:", as.character(def$formula)[1])
+  cat(def$name,":\n\tformula:", strwrap(as.character(def$formula)[1], width = 80, prefix = "\n\t", initial = "" ))
   if(def$note != "") {
     cat("\tNote:", def$note)
   }
@@ -161,14 +132,25 @@ Modelling between-study variability is simply a good practice for any metaanalys
 pp_check_helper <- function(model_names, pp_check_types) {
   if(compute_pp_checks) {
     for(name in model_names) {
-      run_pp_checks(all_models[[name]], all_fits[[name]], data_long, types = pp_check_types)  
+      run_pp_checks(all_models[[name]], all_fits[[name]], data_long, types = pp_check_types, out_func = function(x) {
+        base_theme_font_size = 7
+        base_theme <- theme( 
+                    axis.title = element_text(size = base_theme_font_size), 
+                    axis.text = element_text(size = base_theme_font_size), 
+                    legend.title = element_text(size = base_theme_font_size + 1),
+                    legend.text = element_text(size = base_theme_font_size),
+                    strip.text = element_text(size = base_theme_font_size),
+                    plot.title = element_text(size = base_theme_font_size + 2))
+
+        print(x + base_theme)
+        })  
     }
   }
 } 
 ```
 
 
-```{r}
+```{r, fig.height=3}
 pp_check_helper("gene_only", "source_10")
 ```
 
@@ -176,18 +158,18 @@ Here the bars represents actual prevalance in the data, the dots the posterior m
 
 This does not resolve when including cLOF and/oror age and sex (here using the model filtered for age, as we don't really care about wide posterior intervals)
 
-```{r}
+```{r, fig.height=3}
 pp_check_helper("gene_filtered_age_sex", "source_10")
 ```
 6/14 source are noticeably off in gene_filtered_age_sex
 
-```{r}
+```{r, fig.height=3}
 pp_check_helper("gene_lof_per_gene", "source_10")
 ```
 
 10/25 sources are noticeably off gene_lof_per_gene
 
-```{r}
+```{r, fig.height=3}
 pp_check_helper("gene_lof_per_gene_filtered_age_sex", "source_10")
 ```
 
@@ -195,39 +177,35 @@ pp_check_helper("gene_lof_per_gene_filtered_age_sex", "source_10")
 
 Including source explicitly alleviates a large fraction (but not all) of the problems:
 
-```{r}
+```{r, fig.height=3}
 pp_check_helper("gene_source", "source_10")
 ```
 
 We see 6/25 sources problematic in gene_source. However including cLOF and source makes the fit good across all sources:
 
-```{r}
+```{r, fig.height=3}
 pp_check_helper("gene_source_lof", "source_10")
 ```
 
-```{r}
+```{r, fig.height=3}
 pp_check_helper("gene_source_lof", "source_10_lof")
 ```
 
 
 It therefore seems that both source and cLOF are important factors.
 
-```{r}
-pp_check_helper("gene_source_filtered_lof", "source_10")
-```
-
 ## Between-study variability mostly explains age and sex differences
 
-On the other hand age and sex differences don't necessarily need to be included, as they are sufficiently well explained by the `gene_source_lof` model. First let's look at overall prevalance by sex and age group:
+Age and sex differences don't necessarily need to be included, as they are sufficiently well explained by the `gene_source_lof` model. First let's look at overall prevalance by sex and age group:
 
-```{r}
+```{r, fig.height=3}
 pp_check_helper("gene_source_lof", c("sex","age"))
 ```
 Note that missing data are treated as a separate age category.
 
 No big problems in the bulk age/sex groups. We can also look at age and sex by individual phenotypes (we collapse some of the age groups to make the age + phenotype plot readable:
 
-```{r}
+```{r, fig.height=3}
 pp_check_helper("gene_source_lof", c("sex_phenotype","age_phenotype"))
 ```
 
@@ -237,98 +215,42 @@ Once again only very minor problems (e.g age "20-39" for REN phenotype). We thin
 
 Using the most simple model, we see that cLOF difference are not well modelled for the CI, REP, REN and LIV phenotypes. 
 
-```{r}
+```{r, fig.height=3}
 pp_check_helper("gene_only", "phenotype_lof")
 ```
 
 This disappears when adding a per-phenotype cLOF term to the model (i.e. for a given phenotype the effect of cLOF is assumed equal across all mutations):
 
-```{r}
+```{r, fig.height=3}
 pp_check_helper("gene_lof", c("phenotype_lof","gene_lof"))
 ```
 
-```{r}
+```{r, fig.height=3}
 pp_check_helper("gene_lof_per_gene", c("phenotype_lof","gene_lof"))
 ```
 
 While adding source as a covariate ameliorates the problems with cLOF (it remains problematic only for REN and LIV phenotypes)
 
-```{r}
+```{r, fig.height=3}
 pp_check_helper("gene_source", c("phenotype_lof","gene_lof"))
 ```
 
-The problem is mitigated when both source and cLOF are included
+The problem is mitigated when both source and cLOF are included (even when cLOF effect is not allowed to vary with gene)
 
-```{r}
+```{r, fig.height=3}
 pp_check_helper("gene_source_lof", c("phenotype_lof","gene_lof"))
 ```
 
 Having cLOF coefficient differ per gene does not bring noticeable improvements (TODO check):
 
-```{r}
+```{r, fig.height=3}
 pp_check_helper("gene_source_lof_per_gene", c("phenotype_lof","gene_lof"))
-```
-
-## PP Check for cLOF
-
-
-
-
-```{r, fig.width=8}
-models_to_compare = c("gene_source","gene_source_lof", "gene_source_lof_per_gene", "gene_source_filtered_lof", "gene_lof_per_gene")
-
-pp_check_helper(models_to_compare, c("gene_lof"))
-
-```
-
-First, let us note that the checks for `gene_source_lof` and `gene_source_lof_per_gene` are almost identical. So let us focus on the comparison between `gene_source` and `gene_source_filtered_lof_per_gene`.
-
-What we see is that the `gene_source` model has trouble explaining some properties of unknown.BBS01, BBS02, unknown.BBS03, certain.BBS06 (just barely), certain.BBS07, certain.BBS08 (just barely), certain.BBS10, unknown.BBS12, certain.other.
-
-`gene_source_filtered_lof` only slightly improves over this some of the problematic genes became barely OK and others stayed the same (obviously it does not model the uncertain LOF data).
-
-`gene_lof_per_gene` improves in certrain.BBS08 and certain.other while having problems with unknown.BBS09 (barely) and with slightly worse fit for unnknown.BBS03, unknown.BBS07.
-
-So while there improvements in fitting LOF differences per gene when including LOF in the model, they are not very strong.
-
-```{r}
-pp_check_helper(models_to_compare, c("phenotype_lof"))
-```
-
-Once again `gene_source` and `gene_source_lof_by_gene` are almost identical. Overall the phenotype comparison is worse for the `gene_source` model as it has problems with OBE (barely), certain.CI (barely), REN, LIV, while `gene_source_filtered_lof_by_gene` has no problems. `gene_lof_by_gene` is similar to `gene_source` but improves for LIV.
-
-The substantial problems with fitting REN in `gene_source` are potentially troubling.
-
-This nevertheless indicates that there is some missing information in all fits. 
-
-```{r, fig.width=8}
-pp_check_helper(models_to_compare, c("source"))
-```
-
-`gene_source` and `gene_source_lof_by_gene` are once again almost identical.
-
-The comparison between `gene_source` and `gene_lof_by_gene` is not clear as for sources there is improvement in one and for some in the other.
-
-`gene_source_filtered_lof` removes some of the issues in `gene_source` (e.g. Scheidecker et al. 2013), but retains others (Chaki et al., Schaefer et al. 2011 (a), Schaefer et al. 2016.).
-
-Once again there is a minor advantage in filtering out LOF data while there is no advantage to including LOF in the model. There are at least two possible explanations: when filtering for LOF, there is much less data, but almost the same number of parameters, so the model can accommodate (or even slightly overfit) the data. Another plausible explanation is that there is some important variability among the patients with mutations that are not certainly LOF which hinder fitting.  We however couldn't devise a defensible way to further split the mutations that are not certainly LOF. 
-
-
-## Very narrow priors hinder model fit
-
-We can compare the effect of widening (to $N(0,5)$) or narrowing (to $N(0,1)$ and $N(0,0.1)$) the priors for sd of genes (as those are our primary outcomes). TODO
-
-```{r}
-pp_check_helper(c("gene_source_wide","gene_source_narrow","gene_source_very_narrow"), c("gene"))
 ```
 
 
 ## Model choice verdict
 
 We've shown that source has to be included and there is an advantage in including cLOF per phenotype, but not much improvement when including cLOF per phenotype adn gene. Since the `gene_source_lof_per_gene` model is too flexible for the limited amount of data (results in very wide posterior intervals, spanning odds ratio up to 10000), we think `gene_source_lof` is a better choice.
-
-We've further shown that unless the priors are set extremely tight, they do not influence the results much. We therefore conclude that `gene_source_lof` is the best model, however the next section shows that except for some of the fits that can be shown to be problematic (e.g. that ignore source or the very narrow prior) the verdict on our main conclusions does not really change.
-
 
 # Robustness of conclusions to model choice
 
@@ -643,7 +565,7 @@ evaluation_processed <- evaluation %>%
   gather("Conclusion","Probability", -model_name, -model_nice) %>%
   mutate(Conclusion = factor(Conclusion, levels = levels(freq_conclusions$Conclusion)),
          Category = case_when(model_name %in% c("gene_source", "gene_source_lof", "gene_source_filtered_lof") ~ "Main",
-                              model_name %in% c("gene_only", "gene_lof", "gene_lof_per_gene", "gene_only_filtered_lof", "gene_source_very_narrow") ~ "Bad fits", 
+                              model_name %in% c("gene_only", "gene_lof", "gene_lof_per_gene", "gene_only_filtered_lof") ~ "Bad fits", 
                               TRUE ~ "Secondary") %>% factor(levels = c("Main","Secondary","Bad fits")))
 
 plots_na_color <- "#606060"
@@ -677,18 +599,15 @@ conclusions_plot
 
 ```
 
-```{r}
-for(model in c("gene_source","gene_source_lof")) {
-  def <- models_base[[model]]
-  plot_pairwise_differences(def, all_fits[[model]], data_for_prediction_base_model(def, genes_to_show = paste0("BBS0",c(1,2,4,5,7,8,9)), phenotypes_to_show = phenotypes_to_show)) %>% print()
-}
+Heatmap of posterior probability of statements characterizing individual conclusions. All Bayesian models include gene as covariate but may also include additional covarietes: source, age, sex and certain loss of function (cLOF) - either as a global covariete or by gene. Since age and sex are not available for all data, we can either fit the model only to patients where those are reported (filtered) or impute missing data (imputed). Instead of using cLOF as a covariate, we can fit the model using only patients with cLOF mutations (filtered cLOF). For most models we include a correlation structure across phenotypes (e.g., that two phenotypes occur frequently together across all genes), but this structure may be absent (no corr.) or replaced with a correlation structure across genes (gene corr. - e.g., that two genes have similar pattern of effects across all phenotypes). We also tried modifying the width of prior distributions (wide, narrow, very narrow). See supplementary material for a detailed description of all models and the imputation procedure. Dark grey indicates that the question could not be evaluated for the given model (currently only asking for cLOF differences in models that exclude cLOF). The "Bad fits" category is reserved for models we now fit the data badly, as discussed above.
 
-```
+Some patterns to notice:
 
+* When fitting filtered datasets, there is less certainty implying less strong evidence in both directions
+* Using very narrow priors on gene coefficients ($N(0,0.1)$, i.e. that almost all odds ratios should be less than $\sim 1.2$) unsurprisingly results in little evidence for directional differences between genes.
+* Other than that the conclusions are not sensitive to model choice.
 
-Heatmap of posterior probability of statements characterizing individual conclusions. All Bayesian models include gene as covariate but may also include additional covarietes: source, age, sex and loss of function (lof) - either as a global covariete or by gene. Since age and sex are not available for all data, we can either fit the model only to patients where those are reported (filtered) or impute missing data (imputed). Instead of using lof as a covariate, we can fit the model using only patients with lof mutations (filtered lof). For most models we include a correlation structure across phenotypes (e.g., that two phenotypes occur frequently together across all genes), but this structure may be absent (no corr.) or replaced with a correlation structure across genes (gene corr. - e.g., that two genes have similar pattern of effects across all phenotypes). We also tried modifying the width of prior distributions (wide, narrow, very narrow). See supplementary material for a detailed description of all models and the imputation procedure. Dark grey indicates that the question could not be evaluated for the given model (currently only asking for lof differences in models that exclude lof)
-
-
+## Combining with frequentist results
 
 ```{r}
 build_freq_conclusions_plot <- function(freq_conclusions, categories = TRUE) {
@@ -720,6 +639,7 @@ freq_conclusions_plot <-  build_freq_conclusions_plot(freq_conclusions)
 freq_conclusions_plot
 ```
 
+Heatmap of p-values from frequentist analysis from the same conclusions.
 
 ```{r, fig.width= 9, fig.height=4.5}
 build_combined_conclusions_plot <- function(freq_conclusions_plot, conclusions_plot, rel_widths_plots, rel_widths_legend, rel_heights_legend) {
@@ -744,6 +664,8 @@ build_combined_conclusions_plot <- function(freq_conclusions_plot, conclusions_p
 combined_conclusions_plot <- build_combined_conclusions_plot(freq_conclusions_plot, conclusions_plot, rel_widths_plots = c(1, 1.1), rel_widths_legend = c(4,1), rel_heights_legend = c(1,1.9,0.5)) 
 combined_conclusions_plot
 ```
+
+This is a combined plot for both frequentist and Bayesian analzsis, once again shown mostly consistent results even when frequentist analyses are taken into account. The only big difference is 
 
 ```{r fig.width=7, fig.height=3.8}
 hide_titles_theme <- theme(axis.title.x = element_blank())

@@ -11,6 +11,7 @@ genes_to_show_from_data <- function(data) {
 
 
 intercept_prior <- prior(normal(0,2), class = Intercept)
+b_prior <- prior(normal(0,2), class = b)
 sd_prior <- prior(normal(0,2), class = sd)
 
 default_priors <- c(intercept_prior, sd_prior)
@@ -61,13 +62,13 @@ models_base <- list(
   
   gene_lof = list(
     formula = formula_gene_lof, 
-    priors = default_priors, 
+    priors = c(default_priors, b_prior), 
     note = "",
     additional_components = c("lof"), filter = "none"
   ),
   gene_lof_per_gene = list(
     formula = formula_gene_lof_per_gene, 
-    priors = default_priors, 
+    priors = c(default_priors, b_prior), 
     note = "",
     additional_components = c("lof per gene"), filter = "none"
   ),
@@ -82,14 +83,14 @@ models_base <- list(
 
   gene_source_lof =  list(
     formula = formula_gene_source_lof, 
-    priors = default_priors, 
+    priors = c(default_priors, b_prior), 
     note = "",
     additional_components = c("source", "lof"), filter = "none"
   ),
   
   gene_source_lof_wide = list(
     formula = formula_gene_source_lof, 
-    priors = c(prior(normal(0,5), class = Intercept), prior(normal(0,5), class = sd)), 
+    priors = c(prior(normal(0,5), class = Intercept), prior(normal(0,5), class = sd), b_prior), 
     note = "special priors",
     additional_components = c("source","lof"), filter = "none"
   ),
@@ -111,7 +112,7 @@ models_base <- list(
 
   gene_source_lof_per_gene =  list(
     formula = formula_gene_source_lof_per_gene, 
-    priors = default_priors, 
+    priors = c(default_priors, b_prior), 
     note = "",
     additional_components = c("source", "lof per gene"), filter = "none"
   ),
@@ -184,7 +185,7 @@ models_base <- list(
   ),
   gene_lof_per_gene_filtered_age_sex = list(
     formula = formula_gene_age_sex_lof_per_gene, 
-    priors = default_priors, 
+    priors = c(default_priors, b_prior), 
     note = "",
     additional_components = c("age","sex", "lof per gene"), filter = "age_sex"
   )
