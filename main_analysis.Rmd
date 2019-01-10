@@ -1,8 +1,8 @@
 ---
-title: "Bayesian metaanalysis of BBS phenotypes"
+title: "Appendix 2: Bayesian Metaanalysis of BBS phenotypes"
 author: "Martin Modrák"
 date: '`r format(Sys.time(), "%d %B, %Y")`'
-abstract: 'This is Appendix 2 for the paper "Exploring the function of the BBSome using clinical data: Meta-analysis of genotype-phenotype associations in Bardet-Biedl Syndrome". This document describes the Bayesian analysis reported in the main manuscript. The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes'
+abstract: 'This is an appendix for the paper "Exploring the function of the BBSome using clinical data: Meta-analysis of genotype-phenotype associations in Bardet-Biedl Syndrome". This document describes the Bayesian analysis reported in the main manuscript. The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes or Zenodo, DOI: 10.5281/zenodo.2536748'
 output:
   pdf_document: 
      toc: true
@@ -54,7 +54,7 @@ data %>%  select(-age_corr, -ID, -age_numbers, -age_numbers_groups_guessed, -age
 
 Note in particular, that both age and sex are missing in almost half of the records. Also, the data about individual phenotypes (all the numeric columns) is largely incomplete. Some minor clearing is required to use age, as it is stored as character (a combination of age ranges and ages). For some phenotypes we get values that are not 0 or 1 - those correspond to patients that were monitored in multiple studies, but the phenotype data was inconsistent between studies. In our analysis we treat those patients as exhibiting the phenotype.
 
-`loss_of_function` and `loss_of_function_certain` are different codings of the fact that the protein has certainly lost function (is truncated in both alleles). This variable ended up not being used in the main analysis, for a further discussion of why the choice was made and a comparison of results including loss of function see the multiverse analysis.
+`loss_of_function` and `loss_of_function_certain` are different codings of the fact that the protein has certainly lost function (is truncated in both alleles). 
 
 For some analyses, we group the genes together according to *functional groups*, those are defined as folows:
 
@@ -198,7 +198,7 @@ Most of the results of the model are reported as comparisons of odds in differen
 
 Technically the model works with the logarithm of odds. The logit function trasnforms a probability (prevalence) to log odds, hence the logit "link" used in the model. What is the linear part?
 
-Our model assumes that the true odds of a phenotype is a function of four numbers (*coefficients*): the overall odds of the phenotype in the population, a modifier for the gene the patient has damaged and a modifier for the study the patient is enrolled in. One additional modifier is added when the mutation is a certain loss-of-function (cLOF). These four numbers are multiplied to arrive at the final odds for the patient. Assuming only cLOF mutations for simplicity, this means that () while the odds of a phenotype are allowed to vary between genes and the overall rate of a phenotype may vary between studies, the odds ratio of different genes is the same across all studies. Let's look at an example:
+Our model assumes that the true odds of a phenotype is a function of four numbers (*coefficients*): the overall odds of the phenotype in the population, a modifier for the gene the patient has damaged and a modifier for the study the patient is enrolled in. One additional modifier is added when the mutation is a certain loss-of-function (cLOF). These four numbers are multiplied to arrive at the final odds for the patient. Assuming only cLOF mutations for simplicity, this means that while the odds of a phenotype are allowed to vary between genes and the overall rate of a phenotype may vary between studies, the odds ratio of different genes is the same across all studies. Let's look at an example:
 
 ```{r}
 set.seed(1211)
@@ -207,7 +207,8 @@ tibble(gene = paste("Gene",1:3), odds = c(1, 5, 3)) %>% crossing(tibble(source =
   ggplot(aes(x = gene, y = odds, color = source, group = source, shape = source)) + 
   geom_line() + geom_point() +
   scale_y_log10("true odds") + 
-  facet_wrap(~type)
+  facet_wrap(~type) +
+  base_theme
 ```
 
 Above on the leftmost panel we see that the two studies differ in the odds of the phenotype for each gene, but the ratio of odds for Gene 1 to Gene 2 (and 3) is the same in both studies (since the odds are shown on log scale this manifests as a constant gap between the two lines). This type of between study variation is allowed. On the other two panels, the odds ratio for Gene 1 to Gene 2 (and 3) differs between studies - this type of variation is not allowed by the model. 
@@ -226,7 +227,7 @@ Together those two features result in low risk of overfitting the data, even tho
 
 We also allow for a correlation between phenotypes, e.g. that some phenotypes occur freqently together while others rarely manifest in the same patient. Once again the amount of correlation is estimated from data.
 
-Finally, the "Bayesian" part: We follow the Bayesian paradigm, so our estimates of the model coefficients are not a single number, but rather a distribution - some values are more likely than others, but the data are insufficient to let us determine the coefficients with high certainty. Therefore we never report exact numbers but rather 50% and 95% *credible intervals* of the distribution. Unlike in the confidence intervals in frequentist analysis, we can directly interpret the 95% credible interval as the interval that contains the true value with 95% probability - assuming our model is correct (which it is not, but we hope it is still a useful abstraction).
+Finally, the "Bayesian" part: We follow the Bayesian paradigm, so our estimates of the model coefficients are not a single number, but rather a distribution - some values are more likely than others, but the data are insufficient to let us determine the coefficients with high certainty. Therefore we never report exact numbers but rather 50% and 95% *credible intervals* of the distribution. Unlike confidence intervals in frequentist analysis, we can directly interpret the 95% credible interval as the interval that contains the true value with 95% probability - assuming our model is correct (which it is not, but we hope it is still a useful abstraction).
 
 # The model - mathematical formulation
 
@@ -241,12 +242,12 @@ cat(strwrap(as.character(main_model_def$formula)[1], width = 80, prefix = "\n\t"
 
 this can be expressed in mathematical notation as:
 
-\[
+$$
 \begin{aligned}
 Y_i &\sim Bernoulli(\mu_i) \\
 \mathrm{logit}(\mu_i) &= \alpha + \beta^1_{p_i} + \beta^2_{p_i,g_i} + \beta^3_{p_i,s_i} + c_i\beta^4_{p_i} 
 \end{aligned}
-\]
+$$
 
 Where $p_i \in \{1, ..., P \}$ is the index of the phenotype for $i$-th row, $g_i \in \{1,...,G\}$ is mutated gene for $i$-th row and $s_i \in \{1,...,S\}$ is the index of the source study for $i$-th row. $c_i$ is 1 when the mutation on the $i$-th row is cLOF and 0 otherwise.  $\alpha$ is the intercept and $\beta^1, \beta^2$ and $\beta^3$ model the overall phenotype prevalence,  phenotype prevalance specific to a given mutation and between-study variability in phenotype prevalence respectively. $\beta^4$ models the phenotype-specific effect of cLOF.
 
@@ -255,23 +256,23 @@ Note that this is very similar to running a separate regression for each phenoty
 The priors we use for the parameters are:
 
 
-\[
+$$
 \begin{aligned}
 \alpha &\sim N(0, 2) \\
 \beta^1 &\sim N(0, \sigma_1) \\
 \sigma_1 &\sim N(0, 2) \\
-
+\
 \beta^2 &\sim \mathcal{N}_P(\boldsymbol{0}, \boldsymbol{\Sigma}) \\
 \boldsymbol{\Sigma} &= \boldsymbol{\sigma}_2  \bar{\boldsymbol{\Sigma}} \\
 \bar{\boldsymbol{\Sigma}} &\sim LKJ_P(1) \\
 \sigma_{2,p} &\sim N(0, 2) \\
-
+\
 \beta^3_{p,s} &\sim  N(0, \sigma_{3,p})\\
 \sigma_{3,p} &\sim N(0, 2)\\
-
+\
 \beta^4_{p} &\sim N(0,2)
 \end{aligned}
-\]
+$$
 
 Note that the prior on $\beta^1$ is $P$-dimensional multivariete normal $\mathcal{N}_P$, explicitly modelling the correlation $\bar{\boldsymbol{\Sigma}}$ between the prevalence of individual phenotypes and per-phenotype variance $\sigma_{2,p}$, while the other priors are univariete normal.
 
@@ -292,9 +293,7 @@ data_for_prediction <- data_for_prediction_base_model(main_model_def, genes_to_s
 data_for_prediction_BBSome <- data_for_prediction %>% filter(functional_group_for_gene(gene) == "BBSome", gene != "BBS18")
 ```
 
-TODO - check/update numbers
-
-The fitted model parameters themselves are however hard to interpret, as they operate on log odds scale. It is also hard to say how to handle the between-study variability of coefficients. And this variability  is substantial - note that the `sd` parameters under `~source` (corresponding to $\sigma_3$) admit ranges from $1.11$ to $5.09$, so the odds of a phenotype, given a mutation can plausibly differ between studies by $1.96 \times \pm 1.11 = \pm 2.16$ to $1.96 \times \pm 5.09 = \pm 9.97$ _on the log scale_ (95% of mass of a normal distribution is within $1.96 \times \sigma$ from the mean). 
+The fitted model parameters themselves are however hard to interpret, as they operate on log odds scale. It is also hard to say how to handle the between-study variability of coefficients. And this variability  is substantial - note that the `sd` parameters under `~source` (corresponding to $\sigma_3$) admit ranges from $\sim 1.1$ to $\sim 5.1$, so the odds of a phenotype, given a mutation can plausibly differ between studies by $1.96 \times \pm 1.1 = \pm 2.16$ to $1.96 \times \pm 5.09 = \pm 9.99$ _on the log scale_ (95% of mass of a normal distribution is within $1.96 \times \sigma$ from the mean). 
 
 Instead we will focus on model predictions. In particular, the results we report can be interpreted as if a new study is drawn at random from the same population of studies as we used (i.e. matching all the inclusion criteria) and we directly observe true odds of all phenotypes for all mutations in this study. That is, the predictions do include between-study variability, our uncertainty about the population of studies, our uncertainty about overall prevalence of the individual phenotypes, our uncertainty about the strength of links between mutations and phenotypes and our uncertainty about correlations between the presence of individual phenotypes. The predictions do NOT include the sampling uncertainty of the hypothethical new study. For example when the hypothetical study has the true odds of a phenotype, given a mutation in BBS12, equal to $1:2$ ($0.5$), a study on 20 patients can easily observe odds of $3:17$ ($0.18$) or $11:9$ ($1.22$) simply due to chance, but we will treat the hypothetical study here as having odds of $0.5$ and ignore this additional noise in our results.
 
@@ -377,19 +376,36 @@ This plot integrates the information shown in the plots above and some more.
 
 # LOF
 
-What is the effect of loss of function?
+What is the effect of certain loss of function? Since LOF does not vary per gene, let us look at the corresponding odds ratio per phenotype.
 
 ```{r}
-#TODO
+#Here the LOF coefficient directly corresponds to the odds ratios, so not using predictions, but it is equivalant
+summary_50 <- summary(fit, prob = 0.50)$fixed %>%
+  as.data.frame() %>% 
+  rownames_to_column("parameter") %>% 
+  mutate(lower_50 = exp(`l-50% CI`), upper_50 = exp(`u-50% CI`)) %>% 
+  select(parameter, lower_50, upper_50)
+
+summary_wide <- summary(fit, prob = posterior_interval)$fixed %>%
+  as.data.frame() %>% 
+  rownames_to_column("parameter") %>% 
+  mutate(lower = exp(`l-95% CI`), upper = exp(`u-95% CI`)) %>% 
+  select(parameter, lower, upper)
+
+
+summary_50 %>%
+  inner_join(summary_wide, by = c("parameter" = "parameter")) %>%
+  filter(parameter != "Intercept") %>%
+  mutate(phenotype = gsub("(phenotype)|(:loss_of_function_certain)","", parameter)) %>%
+  ggplot(aes(x = phenotype, ymin = lower, ymax = upper)) +
+    geom_hline(yintercept = 1, color = "darkred")+ 
+    geom_linerange(aes(ymin = lower_50, ymax = upper_50), size = 2) +
+    geom_linerange() +
+    scale_y_log10("Odds ratio cLOF vs. others", labels = simple_num_format) +
+    base_theme
 ```
 
-
-# Evaluating conclusions
-
-The code to evaluate individual conclusions is in the file `conclusions.R`, below is a brief description of those.
-
-TODO vzít z multiverse
-
+For most phenotypes we (expectedly) see that in cLOF mutations the phenotype is more likely. For LIV, RD and REP, the data is not very conclusive. The surprising part is the high posterior probability assigned to cLOF mutations having less severe phenotype in HEART. This might nevertheless be due to biases in reporting or due to higher lethality of HEART phenotype in cLOF mutations (and thus making the patients not be included in the dataset). It is however likely not a result of low sample size: there are `r sum(!is.na(data$HEART))` patients with the HEART phenotype reported, spread roughly equally between cLOF and other mutations.
 
 ```{r saving_figures_for_publication}
 std_width = 8

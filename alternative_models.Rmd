@@ -2,7 +2,7 @@
 title: "Appendix 4: Details of Alternative Models and Model Selection"
 author: "Martin Modrák"
 date: '`r format(Sys.time(), "%d %B, %Y")`'
-abstract: 'This is an appendix for the paper "Exploring the function of the BBSome using clinical data: Meta-analysis of genotype-phenotype associations in Bardet-Biedl Syndrome". This appendix describes all Bayesian models we tried throughout this project. Further we discuss the reasoning behind our choice of model for the main analysis, in particular why between-study variability is crucial and certain loss of function (cLOF) useful while age, and sex can be omitted. The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes'
+abstract: 'This is an appendix for the paper "Exploring the function of the BBSome using clinical data: Meta-analysis of genotype-phenotype associations in Bardet-Biedl Syndrome". This appendix describes all Bayesian models we tried throughout this project. Further we discuss the reasoning behind our choice of model for the main analysis, in particular why between-study variability is crucial and certain loss of function (cLOF) useful while age, and sex can be omitted. The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes or Zenodo, DOI: 10.5281/zenodo.2536748'
 output:
   pdf_document: 
     toc: true
@@ -49,7 +49,7 @@ data_long <- data_long_from_data(data)
 
 ## Base models
 
-Base models are those that work with (a subset of) the original dataset, without any imputation. The models are defined in file `models.R`. They differ in the model formula, subsets of the dataset they use and priors for model coefficients. The syntax for formulas in `brms` is described (in brms manual)[https://rdrr.io/cran/brms/man/brmsformula.html] and will not be explained here. The list of base models follows:
+Base models are those that work with (a subset of) the original dataset, without any imputation. The models are defined in file `models.R`. They differ in the model formula, subsets of the dataset they use and priors for model coefficients. The syntax for formulas in `brms` is described (in brms manual)[https://rdrr.io/cran/brms/man/brmsformula.html] and will not be explained here. The model may work on filtered dataset - `lof` means filtered for only the mutations with certain LOF, `age`,`sex` and `age_sex` corresponds to filtering for patients with reported age, sex or both. The list of base models follows:
 
 ```{r}
 models_base %>% walk(function(def) {
@@ -116,7 +116,7 @@ all_fits <- c(fits_base, fits_imputed)
 
 # Choosing the model for main analysis
 
-In general we use *posterior predictive checks* (PPCheck) to asses model fit. PPCheck is performed by predicting posterior distribution of possible outcomes implied by the fitted model. This distribution can then be compared to what is actually observed in the data and discrepancies can be noted and used to guide model expansion/selection. In our case we focus on the prevalance of positive phenotypes across various subdivisions of the data. Of prime interests are subdivisions *not* taken into account by a model - if the model explains groupings that were not included it is a sign that it works well. If the model consistently misestimates groups it is not aware of, it is an indication that such a group should be involved. We use the `bayesplot` package to perform PPChecks. See (Gabry et al. 2018, Visualisation in Bayesian workflow)[https://arxiv.org/abs/1709.01449] for a mor thorough discussion of PPChecks.
+In general we use *posterior predictive checks* (PPCheck) to asses model fit. PPCheck is performed by predicting posterior distribution of possible outcomes implied by the fitted model. This distribution can then be compared to what is actually observed in the data and discrepancies can be noted and used to guide model expansion/selection. In our case we focus on the prevalance of positive phenotypes across various subdivisions of the data. Of prime interests are subdivisions *not* taken into account by a model - if the model explains groupings that were not included it is a sign that it works well. If the model consistently misestimates groups it is not aware of, it is an indication that such a group should be involved. We use the `bayesplot` package to perform PPChecks. See (Gabry et al. 2018, Visualisation in Bayesian workflow)[https://arxiv.org/abs/1709.01449] for a more thorough discussion of PPChecks.
 
 In most models we assume phenotype correlations because the data were selected for containing at least two phenotypes and diagnosis criteria is based on having multiple phenotypes. Both of these processes could have introduced correlations. However the fitted correlations aren't conclusive and do not increase the explanatory power of the model (models with diffrent correlation structures are also included).
 
@@ -153,7 +153,7 @@ pp_check_helper("gene_only", "source_10")
 
 Here the bars represents actual prevalance in the data, the dots the posterior mean for those subgroups and the lines posterior 95% credible interval. Note that we clump together all phenotypes for simplicity. We see that the model is overly certain in its predictions and the posterior credible intervals frequently miss the actual counts in a study. 11 / 25 sources have predictions not very consistent with data.
 
-This does not resolve when including cLOF and/oror age and sex (here using the model filtered for age, as we don't really care about wide posterior intervals)
+This does not resolve when including cLOF and/or age and sex (here using the model filtered for age, as we don't really care about wide posterior intervals)
 
 ```{r, fig.height=3}
 pp_check_helper("gene_filtered_age_sex", "source_10")
@@ -247,4 +247,4 @@ pp_check_helper("gene_source_lof_per_gene", c("phenotype_lof","gene_lof"))
 
 ## Model selection verdict
 
-We've shown that source has to be included and there is an advantage in including cLOF per phenotype, but not much improvement when including cLOF per phenotype adn gene. Since the `gene_source_lof_per_gene` model is too flexible for the limited amount of data (results in very wide posterior intervals, spanning odds ratio up to 10000), we think `gene_source_lof` is a better choice.
+We've shown that source has to be included and there is an advantage in including cLOF per phenotype, but not much improvement when including cLOF per phenotype and gene. Since the `gene_source_lof_per_gene` model is too flexible for the limited amount of data (results in very wide posterior intervals, spanning odds ratio up to 10000), we think `gene_source_lof` is a better choice.
