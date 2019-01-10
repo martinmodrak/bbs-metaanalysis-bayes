@@ -1,23 +1,18 @@
 ---
-title: "Additional multiverse analysis of BBS phenotypes"
+title: "Appendix 3: Additional multiverse analysis of BBS phenotypes"
 author: "Martin Modrák"
 date: '`r format(Sys.time(), "%d %B, %Y")`'
+abstract: 'This is an appendix for the paper "Exploring the function of the BBSome using clinical data: Meta-analysis of genotype-phenotype associations in Bardet-Biedl Syndrome". Here, we compute how the conclusions of the paper hold under multiple different models. Details of the models can be found in Appends 4. The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes'
 output:
-  pdf_document: 
-    toc: true
+  pdf_document: default
 ---
 
 
-*This is Appendix 3 for the paper "Exploring the function of the BBSome using clinical data: Meta-analysis of genotype-phenotype associations in Bardet-Biedl Syndrome" The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes *
 
 
-This appendix describes all Bayesian models we tried throughout this project. Further we discuss the reasoning behind our choice of model for the main analysis, in particular why between-study variability is crucial and certain loss of function (cLOF) useful while age, and sex can be omitted. Finally, we compute how the conclusions of the paper hold under all of the models.
+*Note: For historical reasons the feature of "certain loss of function" (cLOF) as discussed in the data is called just "lof" in most analysis code. This appendix will thus use "lof" and "cLOF" interchangeably.*
 
-For historical reasons the feature of "certain loss of function" (cLOF) as discussed in the data is called just "lof" in most analysis code. This appendix will thus use "lof" and "cLOF" interchangeably. 
 
-# Model descriptions
-
-All models are Bayesian varying intercept logistic regressions using the `brms` package. Appendix 2 (main analysis) includes both accessible and complete mathematical description of the model we chose for the main analysis, which will not be repeated here. Generally all of the terms in the models are varying intercepts, i.e. the model partially pool the estimates for individual groups (genes, sources, ...) towards population mean to achieve more robust inference.
 
 ```{r setup, echo=FALSE, message = FALSE}
 knitr::opts_chunk$set(echo=FALSE, cache = TRUE)
@@ -43,217 +38,23 @@ source(here("plots.R"))
 compute_pp_checks <- TRUE
 ```
 
-
-```{r load_data}
+```{r}
 data <- read_main_data()
 genes_to_show <- genes_to_show_from_data(data)
-data_long <- data_long_from_data(data)
 ```
 
-## Base models
 
-Base models are those that work with (a subset of) the original dataset, without any imputation. The models are defined in file `models.R`. They differ in the model formula, subsets of the dataset they use and priors for model coefficients. The syntax for formulas in `brms` is described (in brms manual)[https://rdrr.io/cran/brms/man/brmsformula.html] and will not be explained here. The list of base models follows:
-
-```{r}
-models_base %>% walk(function(def) {
-  cat(def$name,":\n\tformula:", strwrap(as.character(def$formula)[1], width = 80, prefix = "\n\t", initial = "" ), "\n\tdata filter: ", def$filter)
-  if(def$note != "") {
-    cat("\tNote:", def$note)
+```{r load_all_fits}
+all_fits <- all_models %>% map(function(def) {
+  stored_fit_file <- paste0(here(stored_fits_dir,def$name), ".rds")
+  if(!file.exists(stored_fit_file)) {
+    stop(paste0("Computed fit for model '", def$name,"' cannot be found at ", stored_fit_file, ".\nYou probably need to run alternative_models.Rmd to compute all fits"))
   }
-  cat("\n\n")
-  #tibble(name = def$name, formula = as.character(def$formula)[1], filter = def$filter,  note = def$note)
+  readRDS(stored_fit_file)
 })
 ```
 
-
-```{r fit_base_models}
-fits_base <- models_base %>%
-  map(function(def) {
-     fit_base_model(def, data_long)
-  }
-) 
-```
-
-
-## Imputation with mice
-
-Including age or sex in the base models is problematic as it involves tossing out `r round(100 * mean(is.na(data$age)))`% or `r round(100 * mean(is.na(data$Sex)))`% of data respectively. This results in wide posterior intervals and weak inferences. To try to ameliorate this we also tested running models on datasets with age and sex imputed, using multiple imputation via the `mice` package. We assume that both age and sex can be related to the functional group of the mutation and to each other. Involving further relations (e.g. individual genes) led to warnings from the `mice` package and we thus didn't use those.
-
-```{r mice_impute, message=FALSE, echo=FALSE, results="hide"}
-set.seed(20181217)
-predictor_matrix <- matrix(0, nrow = 2, ncol = ncol(data))
-colnames(predictor_matrix) <- names(data)
-
-predictor_matrix[, c("functional_group")] <- 1
-predictor_matrix[1, c("Sex")] <- 1
-predictor_matrix[2, c("age_std_for_model")] <- 1
-
-mice_m = 5
-data_mice <- mice(data, m = mice_m, blocks = list("age_std_for_model", "Sex"), predictorMatrix = predictor_matrix)
-if(!is.null(data_mice$loggedEvents)) {
-  data_mice$loggedEvents %>% select(dep, meth, out) %>% distinct()
-}
-
-data_long_mice <- mice::complete(data_mice, "all") %>% map(data_long_from_data)
-```
-
-The imputed models differ in the formulas used, but all use the default priors and do not filter the dataset in any way.
-
-```{r}
-models_imputed %>% walk(function(def) {
-  cat(def$name,":\n\tformula:", strwrap(as.character(def$formula)[1], width = 80, prefix = "\n\t", initial = "" ))
-  if(def$note != "") {
-    cat("\tNote:", def$note)
-  }
-  cat("\n\n")
-  #tibble(name = def$name, formula = as.character(def$formula)[1], filter = def$filter,  note = def$note)
-})
-```
-
-
-```{r fit_imputed_models}
-fits_imputed <- models_imputed %>% map(function(def) { fit_imputed_model(def, data_long_mice)})
-all_fits <- c(fits_base, fits_imputed)
-```
-
-
-# Choosing the model for main analysis
-
-In general we use *posterior predictive checks* (PPCheck) to asses model fit. PPCheck is performed by predicting posterior distribution of possible outcomes implied by the fitted model. This distribution can then be compared to what is actually observed in the data and discrepancies can be noted and used to guide model expansion/selection. In our case we focus on the prevalance of positive phenotypes across various subdivisions of the data. Of prime interests are subdivisions *not* taken into account by a model - if the model explains groupings that were not included it is a sign that it works well. If the model consistently misestimates groups it is not aware of, it is an indication that such a group should be involved. We use the `bayesplot` package to perform PPChecks. See (Gabry et al. 2018, Visualisation in Bayesian workflow)[https://arxiv.org/abs/1709.01449] for a mor thorough discussion of PPChecks.
-
-In most models we assume phenotype correlations because the data were selected for containing at least two phenotypes and diagnosis criteria is based on having multiple phenotypes. Both of these processes could have introduced correlations. However the fitted correlations aren't conclusive and do not increase the explanatory power of the model (models with diffrent correlation structures are also included).
-
-
-## Between-study variability needs to be included
-
-Modelling between-study variability is simply a good practice for any metaanalysis, but PPChecks can convince us that models ignoring it do not fit the data well. Let's start by looking at overall prevalance for studies with at least 10 patients and how the most basic model (`gene_only`, taking only the gene into account) fares:
-
-```{r}
-pp_check_helper <- function(model_names, pp_check_types) {
-  if(compute_pp_checks) {
-    for(name in model_names) {
-      run_pp_checks(all_models[[name]], all_fits[[name]], data_long, types = pp_check_types, out_func = function(x) {
-        base_theme_font_size = 7
-        base_theme <- theme( 
-                    axis.title = element_text(size = base_theme_font_size), 
-                    axis.text = element_text(size = base_theme_font_size), 
-                    legend.title = element_text(size = base_theme_font_size + 1),
-                    legend.text = element_text(size = base_theme_font_size),
-                    strip.text = element_text(size = base_theme_font_size),
-                    plot.title = element_text(size = base_theme_font_size + 2))
-
-        print(x + base_theme)
-        })  
-    }
-  }
-} 
-```
-
-
-```{r, fig.height=3}
-pp_check_helper("gene_only", "source_10")
-```
-
-Here the bars represents actual prevalance in the data, the dots the posterior mean for those subgroups and the lines posterior 95% credible interval. Note that we clump together all phenotypes for simplicity. We see that the model is overly certain in its predictions and the posterior credible intervals frequently miss the actual counts in a study. 11 / 25 sources have predictions not very consistent with data.
-
-This does not resolve when including cLOF and/oror age and sex (here using the model filtered for age, as we don't really care about wide posterior intervals)
-
-```{r, fig.height=3}
-pp_check_helper("gene_filtered_age_sex", "source_10")
-```
-6/14 source are noticeably off in gene_filtered_age_sex
-
-```{r, fig.height=3}
-pp_check_helper("gene_lof_per_gene", "source_10")
-```
-
-10/25 sources are noticeably off gene_lof_per_gene
-
-```{r, fig.height=3}
-pp_check_helper("gene_lof_per_gene_filtered_age_sex", "source_10")
-```
-
-5/14 sources are noticeably off for gene_lof_per_gene_filtered_age_sex
-
-Including source explicitly alleviates a large fraction (but not all) of the problems:
-
-```{r, fig.height=3}
-pp_check_helper("gene_source", "source_10")
-```
-
-We see 6/25 sources problematic in gene_source. However including cLOF and source makes the fit good across all sources:
-
-```{r, fig.height=3}
-pp_check_helper("gene_source_lof", "source_10")
-```
-
-```{r, fig.height=3}
-pp_check_helper("gene_source_lof", "source_10_lof")
-```
-
-
-It therefore seems that both source and cLOF are important factors.
-
-## Between-study variability mostly explains age and sex differences
-
-Age and sex differences don't necessarily need to be included, as they are sufficiently well explained by the `gene_source_lof` model. First let's look at overall prevalance by sex and age group:
-
-```{r, fig.height=3}
-pp_check_helper("gene_source_lof", c("sex","age"))
-```
-Note that missing data are treated as a separate age category.
-
-No big problems in the bulk age/sex groups. We can also look at age and sex by individual phenotypes (we collapse some of the age groups to make the age + phenotype plot readable:
-
-```{r, fig.height=3}
-pp_check_helper("gene_source_lof", c("sex_phenotype","age_phenotype"))
-```
-
-Once again only very minor problems (e.g age "20-39" for REN phenotype). We think those can be safely ignored.
-
-## Loss-of-function differences are of a relatively minor importance
-
-Using the most simple model, we see that cLOF difference are not well modelled for the CI, REP, REN and LIV phenotypes. 
-
-```{r, fig.height=3}
-pp_check_helper("gene_only", "phenotype_lof")
-```
-
-This disappears when adding a per-phenotype cLOF term to the model (i.e. for a given phenotype the effect of cLOF is assumed equal across all mutations):
-
-```{r, fig.height=3}
-pp_check_helper("gene_lof", c("phenotype_lof","gene_lof"))
-```
-
-```{r, fig.height=3}
-pp_check_helper("gene_lof_per_gene", c("phenotype_lof","gene_lof"))
-```
-
-While adding source as a covariate ameliorates the problems with cLOF (it remains problematic only for REN and LIV phenotypes)
-
-```{r, fig.height=3}
-pp_check_helper("gene_source", c("phenotype_lof","gene_lof"))
-```
-
-The problem is mitigated when both source and cLOF are included (even when cLOF effect is not allowed to vary with gene)
-
-```{r, fig.height=3}
-pp_check_helper("gene_source_lof", c("phenotype_lof","gene_lof"))
-```
-
-Having cLOF coefficient differ per gene does not bring noticeable improvements (TODO check):
-
-```{r, fig.height=3}
-pp_check_helper("gene_source_lof_per_gene", c("phenotype_lof","gene_lof"))
-```
-
-
-## Model choice verdict
-
-We've shown that source has to be included and there is an advantage in including cLOF per phenotype, but not much improvement when including cLOF per phenotype adn gene. Since the `gene_source_lof_per_gene` model is too flexible for the limited amount of data (results in very wide posterior intervals, spanning odds ratio up to 10000), we think `gene_source_lof` is a better choice.
-
-# Robustness of conclusions to model choice
-
+# Defining Precise Criteria
 
 ```{r}
 min_interesting_effect <- 2
@@ -267,15 +68,15 @@ There is some flexibility in defining the exact model configurations consistent 
 
 The exact definition of the individual conclusions follow.
 
+
 ```{r}
 n_genes_lof_different <- 5
 ```
 
-*	The severity of BBS is worse in patients with LOF mutations than in patients with other mutations. 
-  * Ignored for models that do not include LOF
-  * Measured as posterior probability, that the LOF effect is positive (OR > 1) for at least `r n_genes_lof_different` BBSome genes in `r min_phenotypes_for_diffs` phenotypes.
+  *	The severity of BBS is worse in patients with LOF mutations than in patients with other mutations. 
+    * Ignored for models that do not include LOF
+    * Measured as posterior probability, that the LOF effect is positive (OR > 1) for at least `r n_genes_lof_different` BBSome genes in `r min_phenotypes_for_diffs` phenotypes.
 ```{r}
-#TODO: look on predictions for LOF
 
 evaluator_lof <- function(def, fit) {
  if("lof" %in% def$additional_components || "lof per gene" %in% def$additional_components)  {
@@ -302,8 +103,8 @@ evaluator_lof <- function(def, fit) {
 }
 ```
   
-*	The data suggest that BBS3 has lower severity than mutations in different functional groups of genes.
-  * Measured as posterior probability, that odds ratio is < 1 for at least `r min_phenotypes_for_diffs` phenotypes for at least 1/2 of pairwise gene comparisons.
+  *	The data suggest that BBS3 has lower severity than mutations in different functional groups of genes.
+    * Measured as posterior probability, that odds ratio is < 1 for at least `r min_phenotypes_for_diffs` phenotypes for at least 1/2 of pairwise gene comparisons.
   
 ```{r}
 evaluator_functional_groups_lower <- function(group1, group2) {
@@ -323,8 +124,8 @@ evaluator_functional_groups_lower <- function(group1, group2) {
 evaluators[["bbs3_vs_bbsome"]] <- evaluator_functional_groups_lower("BBS03","BBSome")
 evaluators[["bbs3_vs_chaperonins"]] <- evaluator_functional_groups_lower("BBS03","Chaperonins")
 ```
-*	The data suggest a difference between the severity of BBS in patients with mutations in different BBSome subunits.
-  * Measured as posterior probability, that there is clinically relevant effect for at least `r min_phenotypes_for_diffs` phenotypes for at least `r min_bbsome_pairwise_for_diffs` pairwise comparisons. 
+  *	The data suggest a difference between the severity of BBS in patients with mutations in different BBSome subunits.
+    * Measured as posterior probability, that there is clinically relevant effect for at least `r min_phenotypes_for_diffs` phenotypes for at least `r min_bbsome_pairwise_for_diffs` pairwise comparisons. 
 ```{r}
 evaluators[["bbsome_genes_differ"]] <- function(samples_diff, samples_diff_bbsome, samples_prediction_bbsome, samples_linear_bbsome) {
 samples_diff_bbsome %>% 
@@ -356,16 +157,12 @@ samples_diff_bbsome %>%
 
 ```
 
-
-*	BBS2 and BBS7 share similar pattern of penetrance of symptoms.
-*	BBS4 phenotype is the most severe of all BBSome subunits.
-  * Očekávám, že nebude potvrzeno (kvůli RD, OBE, PD)
-  * Probability that BBS4 has top 3 odds ratios for at least 5 phenotypes
-  * Probability that a patient with BBS4 has the most #phenotypes.
+  *	BBS4 phenotype is the most severe of all BBSome subunits.
+    * Probability that BBS4 has top 3 odds ratios for at least 5 phenotypes
+    * Probability that a patient with BBS4 has the most #phenotypes.
 ```{r}
 evaluators[["bbs04_top"]] <- function(samples_diff, samples_diff_bbsome, samples_prediction_bbsome, samples_linear_bbsome) {
 samples_diff_bbsome %>% 
-    #TODO phenotype
   filter(gene.x == "BBS04", gene.y != "BBS04") %>%
   group_by(sample, phenotype) %>%
   summarise(bbs04_top = sum(odds_ratio < 1) <= 2) %>%
@@ -387,8 +184,8 @@ evaluators[["bbs04_most_pheno"]] <- function(samples_diff, samples_diff_bbsome, 
     summarise(`BBS4 most #phenotypes` = mean(has_most_pheno))
 }
 ```
-*	Mutations in different BBSome subunits predispose to different renal phenotype.
-  *  Measured as posterior probability, that there is clinically relevant effect for at least `r min_bbsome_pairwise_for_diffs` pairwise comparisons. 
+  *	Mutations in different BBSome subunits predispose to different renal phenotype.
+    *  Measured as posterior probability, that there is clinically relevant effect for at least `r min_bbsome_pairwise_for_diffs` pairwise comparisons. 
 ```{r}
 evaluators[["REN_bbsome_genes_differ"]] <- function(samples_diff, samples_diff_bbsome, samples_prediction_bbsome, samples_linear_bbsome) {
   samples_diff_bbsome %>% 
@@ -400,34 +197,8 @@ evaluators[["REN_bbsome_genes_differ"]] <- function(samples_diff, samples_diff_b
 }
 ```
 
-  
-*	Polydactyly is more frequent in BBS2 patients compared to BBS1 patients.
-  * Directly the probability that the OR > 1 (nebo OR > min. efekt)
-```{r}
-evaluator_prob_pairwise_diff <- function(phenotype_name, gene_more_frequent, gene_less_frequent) {
-  function (samples_diff, samples_diff_bbsome, samples_prediction_bbsome, samples_linear_bbsome) {
-     target_column_name = paste0(phenotype_name,": ", bbs_labeller(gene_more_frequent), " more frequent than ", bbs_labeller(gene_less_frequent))
-      samples_diff %>% 
-        filter(phenotype == phenotype_name, gene.x == gene_more_frequent, gene.y == gene_less_frequent) %>%
-        group_by(sample) %>%
-        summarise(all_higher = all(odds_ratio >= 1)) %>%
-        ungroup() %>%
-        summarise(!!target_column_name := mean(all_higher))   
-  }
-}
-
-evaluators[["PD_BBS02_BBS01"]] <- evaluator_prob_pairwise_diff("PD","BBS02","BBS01")
-```
-
-* Polydactyly is more frequent in BBS10 patients compared to BBS1 patients
-```{r}
-evaluators[["PD_BBS10_BBS01"]] <- evaluator_prob_pairwise_diff("PD","BBS10","BBS01")
-
-```
-
-*	Cognitive impairment is less frequent in BBS3 patients compared to other patients (all canonical BBS genes).
-  * Tohle trochu dubluje tu diskuzi o func. groups
-  * Probability that all pairwise odds are less
+  *	Differences between small groups of genes - Probability that all pairwise odds ratios are greater/less than 1 (depending on the direction of the comparison) 
+    * Cognitive impairment is less frequent in BBS3 patients compared to other patients (all canonical BBS genes).
 ```{r}
 evaluator_prob_group_diff_all <- function(phenotype_name, group1, group2, group1_name = paste0(group1, collapse = "_"),group2_name = paste0(group2, collapse = "_")) {
     function (samples_diff, samples_diff_bbsome, samples_prediction_bbsome, samples_linear_bbsome) {
@@ -445,51 +216,76 @@ evaluator_prob_group_diff_all <- function(phenotype_name, group1, group2, group1
 evaluators[["CI_BBSO3_all"]] <- evaluator_prob_group_diff_all("CI", paste0("BBS0", c(1,2,4,5,7,8,9)), "BBS03", group1_name = "BBSome")
 ```
 
-*	Cognitive impairment is more frequent in BBS7 patients compared to other patients wirh mutations in BBSome subunits.
-  * Očekávám, že nebude potvrzeno
+    * Cognitive impairment is more frequent in BBS7 patients compared to other patients wirh mutations in BBSome subunits.
 ```{r}
 evaluators[["CI_BBS07_all"]] <-  evaluator_prob_group_diff_all("CI", "BBS07", paste0("BBS0", c(1,2,4,5,8,9)), group2_name = "others")
 
 ```
-
-*	Renal involvement is less frequent in BBS1, BBS4 and BBS8 patients compared to BBS2, BBS7, BBS9 patients.
+  
+    *	Renal involvement is less frequent in BBS1, BBS4 and BBS8 patients compared to BBS2, BBS7, BBS9 patients.
 ```{r}
 evaluators[["REN_groups_all"]] <- evaluator_prob_group_diff_all("REN", paste0("BBS0", c(2,7,9)),  paste0("BBS0", c(1,4,8)), group1_name = "BBS2,7,9", group2_name = "BBS1,4,8")
 ```
-
-*	Renal involvment is less frequent in BBS1 patients compared to BBS2 patients.
-```{r}
-evaluators[["REN_BBS1_BBS2"]] <- evaluator_prob_pairwise_diff("REN","BBS02","BBS01")
-```
-*	Renal involvment is less frequent in BBS1 patients compared to BBS10 patients.
-```{r}
-evaluators[["REN_BBS1_BBS10"]] <- evaluator_prob_pairwise_diff("REN","BBS10","BBS01")
-```
-*	Liver involvment is less frequent in BBS1 patients compared to BBS2 patients.
-```{r}
-evaluators[["LIV_BBS1_BBS2"]] <- evaluator_prob_pairwise_diff("LIV","BBS02","BBS01")
-```
-*	Liver involvment is less frequent in BBS1 patients compared to BBS10 patients.
-```{r}
-evaluators[["LIV_BBS1_BBS10"]] <- evaluator_prob_pairwise_diff("LIV","BBS10","BBS01")
-```
-*	Patients with BBS2 mutations are more likely to have heart anomalies compared to patients with other BBSome mutations.
+    *	Patients with BBS2 mutations are more likely to have heart anomalies compared to patients with other BBSome mutations.
 ```{r}
 evaluators[["HEART_BBS2_all"]] <-  evaluator_prob_group_diff_all("HEART", "BBS02", paste0("BBS0", c(1,4,5,7,8,9)), group2_name = "others")
 ```
-*	Patients with BBS5 mutations are more likely to have liver anomalies compared to patients with other BBSome mutations.
+    *	Patients with BBS5 mutations are more likely to have liver anomalies compared to patients with other BBSome mutations.
 ```{r}
 evaluators[["LIVER_BBS5_all"]] <-  evaluator_prob_group_diff_all("LIV", "BBS05", paste0("BBS0", c(1,2,4,7,8,9)), group2_name = "others")
 ```
-*	Patients with BBS4 mutations are less likely to have liver anomalies compared to patients with other BBSome mutations.
+    *	Patients with BBS4 mutations are less likely to have liver anomalies compared to patients with other BBSome mutations.
 
 ```{r}
 evaluators[["LIVER_BBS4_all"]] <-  evaluator_prob_group_diff_all("LIV", paste0("BBS0", c(1,2,5,7,8,9)), "BBS04", group1_name = "others")
+```  
+  
+  *	Individual differences in phenotype between two genes: directly the probability that the OR > 1 for patients with cLOF mutation.
+    * Polydactyly is more frequent in BBS2 patients compared to BBS1 patients.
+```{r}
+evaluator_prob_pairwise_diff <- function(phenotype_name, gene_more_frequent, gene_less_frequent) {
+  function (samples_diff, samples_diff_bbsome, samples_prediction_bbsome, samples_linear_bbsome) {
+     target_column_name = paste0(phenotype_name,": ", bbs_labeller(gene_more_frequent), " more frequent than ", bbs_labeller(gene_less_frequent))
+      samples_diff %>% 
+        filter(phenotype == phenotype_name, gene.x == gene_more_frequent, gene.y == gene_less_frequent) %>%
+        group_by(sample) %>%
+        summarise(all_higher = all(odds_ratio >= 1)) %>%
+        ungroup() %>%
+        summarise(!!target_column_name := mean(all_higher))   
+  }
+}
+
+evaluators[["PD_BBS02_BBS01"]] <- evaluator_prob_pairwise_diff("PD","BBS02","BBS01")
 ```
 
-
-
+    * Polydactyly is more frequent in BBS10 patients compared to BBS1 patients
 ```{r}
+evaluators[["PD_BBS10_BBS01"]] <- evaluator_prob_pairwise_diff("PD","BBS10","BBS01")
+
+```
+
+    *	Renal involvment is less frequent in BBS1 patients compared to BBS2 patients.
+```{r}
+evaluators[["REN_BBS1_BBS2"]] <- evaluator_prob_pairwise_diff("REN","BBS02","BBS01")
+```
+    *	Renal involvment is less frequent in BBS1 patients compared to BBS10 patients.
+```{r}
+evaluators[["REN_BBS1_BBS10"]] <- evaluator_prob_pairwise_diff("REN","BBS10","BBS01")
+```
+    *	Liver involvment is less frequent in BBS1 patients compared to BBS2 patients.
+```{r}
+evaluators[["LIV_BBS1_BBS2"]] <- evaluator_prob_pairwise_diff("LIV","BBS02","BBS01")
+```
+    *	Liver involvment is less frequent in BBS1 patients compared to BBS10 patients.
+```{r}
+evaluators[["LIV_BBS1_BBS10"]] <- evaluator_prob_pairwise_diff("LIV","BBS10","BBS01")
+```
+    
+
+
+# Bayesian Comparison
+
+```{r compute_evaluation}
 models_for_test <- all_models[c("gene_source_lof","gene_source_filtered_lof","gene_imputed_age_sex")]
 
 evaluation <- all_models %>% 
@@ -599,7 +395,7 @@ conclusions_plot
 
 ```
 
-Heatmap of posterior probability of statements characterizing individual conclusions. All Bayesian models include gene as covariate but may also include additional covarietes: source, age, sex and certain loss of function (cLOF) - either as a global covariete or by gene. Since age and sex are not available for all data, we can either fit the model only to patients where those are reported (filtered) or impute missing data (imputed). Instead of using cLOF as a covariate, we can fit the model using only patients with cLOF mutations (filtered cLOF). For most models we include a correlation structure across phenotypes (e.g., that two phenotypes occur frequently together across all genes), but this structure may be absent (no corr.) or replaced with a correlation structure across genes (gene corr. - e.g., that two genes have similar pattern of effects across all phenotypes). We also tried modifying the width of prior distributions (wide, narrow, very narrow). See supplementary material for a detailed description of all models and the imputation procedure. Dark grey indicates that the question could not be evaluated for the given model (currently only asking for cLOF differences in models that exclude cLOF). The "Bad fits" category is reserved for models we now fit the data badly, as discussed above.
+Heatmap of posterior probability of statements characterizing individual conclusions. All Bayesian models include gene as covariate but may also include additional covarietes: source, age, sex and certain loss of function (cLOF) - either as a global covariete or by gene. Since age and sex are not available for all data, we can either fit the model only to patients where those are reported (filtered) or impute missing data (imputed). Instead of using cLOF as a covariate, we can fit the model using only patients with cLOF mutations (filtered cLOF). For most models we include a correlation structure across phenotypes (e.g., that two phenotypes occur frequently together across all genes), but this structure may be absent (no corr.) or replaced with a correlation structure across genes (gene corr. - e.g., that two genes have similar pattern of effects across all phenotypes). We also tried modifying the width of prior distributions (wide, narrow, very narrow). See supplementary material for a detailed description of all models and the imputation procedure. Dark grey indicates that the question could not be evaluated for the given model (currently only asking for cLOF differences in models that exclude cLOF). The "Bad fits" category is reserved for models we now fit the data badly, as discussed in Appendix 4.
 
 Some patterns to notice:
 
@@ -607,7 +403,7 @@ Some patterns to notice:
 * Using very narrow priors on gene coefficients ($N(0,0.1)$, i.e. that almost all odds ratios should be less than $\sim 1.2$) unsurprisingly results in little evidence for directional differences between genes.
 * Other than that the conclusions are not sensitive to model choice.
 
-## Combining with frequentist results
+# Combining with frequentist results
 
 ```{r}
 build_freq_conclusions_plot <- function(freq_conclusions, categories = TRUE) {
@@ -665,7 +461,9 @@ combined_conclusions_plot <- build_combined_conclusions_plot(freq_conclusions_pl
 combined_conclusions_plot
 ```
 
-This is a combined plot for both frequentist and Bayesian analzsis, once again shown mostly consistent results even when frequentist analyses are taken into account. The only big difference is 
+This is a combined plot for both frequentist and Bayesian analzsis, once again shown mostly consistent results even when frequentist analyses are taken into account. The only big difference is that some of the HEART and LIV conclusions are not supported by most Bayesian analyses, or only those ignoring between-study variability.
+
+Finally a brief summary of the main analyses as shown in the main paper.
 
 ```{r fig.width=7, fig.height=3.8}
 hide_titles_theme <- theme(axis.title.x = element_blank())
@@ -691,6 +489,7 @@ combined_conclusions_plot %>% ggsave(here("tmp_pics","conclusions.pdf"), ., widt
 combined_conclusions_main_plot %>% ggsave(here("tmp_pics","conclusions_main.pdf"), ., width = 7, height = 3.8)
 ```
 
+# Original Computing Environment
 
 ```{r}
 sessionInfo()

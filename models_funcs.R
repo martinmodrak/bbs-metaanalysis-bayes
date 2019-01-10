@@ -9,6 +9,9 @@ filter_data_by_model_def <- function(def, data_long) {
   )  
 }
 
+
+stored_fits_dir <- "stored_fits"
+
 fit_base_model <- function(def, data_long) {
   if(is.null(def)) {
     stop("Invalid def")
@@ -18,7 +21,6 @@ fit_base_model <- function(def, data_long) {
     stop("Cannot be used on models with imputed data")
   }
   
-  stored_fits_dir <- "stored_fits"
   if(!dir.exists(here(stored_fits_dir))) {
     dir.create(here(stored_fits_dir))
   }

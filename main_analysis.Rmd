@@ -2,10 +2,13 @@
 title: "Bayesian metaanalysis of BBS phenotypes"
 author: "Martin Modrák"
 date: '`r format(Sys.time(), "%d %B, %Y")`'
+abstract: 'This is Appendix 2 for the paper "Exploring the function of the BBSome using clinical data: Meta-analysis of genotype-phenotype associations in Bardet-Biedl Syndrome". This document describes the Bayesian analysis reported in the main manuscript. The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes'
 output:
   pdf_document: 
      toc: true
 ---
+
+*Note: A separate supplementary file (Appendix 3) describes the multiverse analysis where we test how the results change with different modelling assumptions. All references to "multiverse analysis" in this text point to this document.*
 
 ```{r setup, echo=FALSE, message = FALSE}
 knitr::opts_chunk$set(echo=FALSE, cache = TRUE) #TODO remove cache once tweaks are done
@@ -38,10 +41,6 @@ if(!dir.exists(here(stored_fits_dir))) {
 
 ```
 
-*This is Appendix 2 for the paper "Exploring the function of the BBSome using clinical data: Meta-analysis of genotype-phenotype associations in Bardet-Biedl Syndrome". The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes *
-
-
-This document describes the Bayesian analysis reported in the main manuscript. A separate supplementary file (Appendix 3) describes the multiverse analysis where we test how the results change with different modelling assumptions. All references to "multiverse analysis" in this text point to this document.
 
 # The data
 

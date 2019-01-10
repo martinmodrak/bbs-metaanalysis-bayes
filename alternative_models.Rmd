@@ -1,0 +1,250 @@
+---
+title: "Appendix 4: Details of Alternative Models and Model Selection"
+author: "Martin Modrák"
+date: '`r format(Sys.time(), "%d %B, %Y")`'
+abstract: 'This is an appendix for the paper "Exploring the function of the BBSome using clinical data: Meta-analysis of genotype-phenotype associations in Bardet-Biedl Syndrome". This appendix describes all Bayesian models we tried throughout this project. Further we discuss the reasoning behind our choice of model for the main analysis, in particular why between-study variability is crucial and certain loss of function (cLOF) useful while age, and sex can be omitted. The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes'
+output:
+  pdf_document: 
+    toc: true
+---
+
+
+*Note: For historical reasons the feature of "certain loss of function" (cLOF) as discussed in the data is called just "lof" in most analysis code. This appendix will thus use "lof" and "cLOF" interchangeably.*
+
+
+# Model descriptions
+
+All models are Bayesian varying intercept logistic regressions using the `brms` package. Appendix 2 (main analysis) includes both accessible and complete mathematical description of the model we chose for the main analysis, which will not be repeated here. Generally all of the terms in the models are varying intercepts, i.e. the model partially pool the estimates for individual groups (genes, sources, ...) towards population mean to achieve more robust inference.
+
+```{r setup, echo=FALSE, message = FALSE}
+knitr::opts_chunk$set(echo=FALSE, cache = TRUE)
+library(rstan)
+library(brms)
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+library(skimr)
+library(readxl)
+library(here)
+library(mice)
+library(tidyverse)
+library(tidybayes)
+library(bayesplot)
+library(cowplot)
+
+source(here("data_processing.R"))
+source(here("models.R"))
+source(here("models_funcs.R"))
+source(here("plots.R"))
+
+##PP Checks take time, so turn this off for quicker computation of the rest
+compute_pp_checks <- TRUE
+```
+
+
+```{r load_data}
+data <- read_main_data()
+genes_to_show <- genes_to_show_from_data(data)
+data_long <- data_long_from_data(data)
+```
+
+## Base models
+
+Base models are those that work with (a subset of) the original dataset, without any imputation. The models are defined in file `models.R`. They differ in the model formula, subsets of the dataset they use and priors for model coefficients. The syntax for formulas in `brms` is described (in brms manual)[https://rdrr.io/cran/brms/man/brmsformula.html] and will not be explained here. The list of base models follows:
+
+```{r}
+models_base %>% walk(function(def) {
+  cat(def$name,":\n\tformula:", strwrap(as.character(def$formula)[1], width = 80, prefix = "\n\t", initial = "" ), "\n\tdata filter: ", def$filter)
+  if(def$note != "") {
+    cat("\tNote:", def$note)
+  }
+  cat("\n\n")
+  #tibble(name = def$name, formula = as.character(def$formula)[1], filter = def$filter,  note = def$note)
+})
+```
+
+
+```{r fit_base_models}
+fits_base <- models_base %>%
+  map(function(def) {
+     fit_base_model(def, data_long)
+  }
+) 
+```
+
+
+## Imputation with mice
+
+Including age or sex in the base models is problematic as it involves tossing out `r round(100 * mean(is.na(data$age)))`% or `r round(100 * mean(is.na(data$Sex)))`% of data respectively. This results in wide posterior intervals and weak inferences. To try to ameliorate this we also tested running models on datasets with age and sex imputed, using multiple imputation via the `mice` package. We assume that both age and sex can be related to the functional group of the mutation and to each other. Involving further relations (e.g. individual genes) led to warnings from the `mice` package and we thus didn't use those.
+
+```{r mice_impute, message=FALSE, echo=FALSE, results="hide"}
+set.seed(20181217)
+predictor_matrix <- matrix(0, nrow = 2, ncol = ncol(data))
+colnames(predictor_matrix) <- names(data)
+
+predictor_matrix[, c("functional_group")] <- 1
+predictor_matrix[1, c("Sex")] <- 1
+predictor_matrix[2, c("age_std_for_model")] <- 1
+
+mice_m = 5
+data_mice <- mice(data, m = mice_m, blocks = list("age_std_for_model", "Sex"), predictorMatrix = predictor_matrix)
+if(!is.null(data_mice$loggedEvents)) {
+  data_mice$loggedEvents %>% select(dep, meth, out) %>% distinct()
+}
+
+data_long_mice <- mice::complete(data_mice, "all") %>% map(data_long_from_data)
+```
+
+The imputed models differ in the formulas used, but all use the default priors and do not filter the dataset in any way.
+
+```{r}
+models_imputed %>% walk(function(def) {
+  cat(def$name,":\n\tformula:", strwrap(as.character(def$formula)[1], width = 80, prefix = "\n\t", initial = "" ))
+  if(def$note != "") {
+    cat("\tNote:", def$note)
+  }
+  cat("\n\n")
+  #tibble(name = def$name, formula = as.character(def$formula)[1], filter = def$filter,  note = def$note)
+})
+```
+
+
+```{r fit_imputed_models}
+fits_imputed <- models_imputed %>% map(function(def) { fit_imputed_model(def, data_long_mice)})
+all_fits <- c(fits_base, fits_imputed)
+```
+
+
+# Choosing the model for main analysis
+
+In general we use *posterior predictive checks* (PPCheck) to asses model fit. PPCheck is performed by predicting posterior distribution of possible outcomes implied by the fitted model. This distribution can then be compared to what is actually observed in the data and discrepancies can be noted and used to guide model expansion/selection. In our case we focus on the prevalance of positive phenotypes across various subdivisions of the data. Of prime interests are subdivisions *not* taken into account by a model - if the model explains groupings that were not included it is a sign that it works well. If the model consistently misestimates groups it is not aware of, it is an indication that such a group should be involved. We use the `bayesplot` package to perform PPChecks. See (Gabry et al. 2018, Visualisation in Bayesian workflow)[https://arxiv.org/abs/1709.01449] for a mor thorough discussion of PPChecks.
+
+In most models we assume phenotype correlations because the data were selected for containing at least two phenotypes and diagnosis criteria is based on having multiple phenotypes. Both of these processes could have introduced correlations. However the fitted correlations aren't conclusive and do not increase the explanatory power of the model (models with diffrent correlation structures are also included).
+
+
+## Between-study variability needs to be included
+
+Modelling between-study variability is simply a good practice for any metaanalysis, but PPChecks can convince us that models ignoring it do not fit the data well. Let's start by looking at overall prevalance for studies with at least 10 patients and how the most basic model (`gene_only`, taking only the gene into account) fares:
+
+```{r}
+pp_check_helper <- function(model_names, pp_check_types) {
+  if(compute_pp_checks) {
+    for(name in model_names) {
+      run_pp_checks(all_models[[name]], all_fits[[name]], data_long, types = pp_check_types, out_func = function(x) {
+        base_theme_font_size = 7
+        base_theme <- theme( 
+                    axis.title = element_text(size = base_theme_font_size), 
+                    axis.text = element_text(size = base_theme_font_size), 
+                    legend.title = element_text(size = base_theme_font_size + 1),
+                    legend.text = element_text(size = base_theme_font_size),
+                    strip.text = element_text(size = base_theme_font_size),
+                    plot.title = element_text(size = base_theme_font_size + 2))
+
+        print(x + base_theme)
+        })  
+    }
+  }
+} 
+```
+
+
+```{r, fig.height=3}
+pp_check_helper("gene_only", "source_10")
+```
+
+Here the bars represents actual prevalance in the data, the dots the posterior mean for those subgroups and the lines posterior 95% credible interval. Note that we clump together all phenotypes for simplicity. We see that the model is overly certain in its predictions and the posterior credible intervals frequently miss the actual counts in a study. 11 / 25 sources have predictions not very consistent with data.
+
+This does not resolve when including cLOF and/oror age and sex (here using the model filtered for age, as we don't really care about wide posterior intervals)
+
+```{r, fig.height=3}
+pp_check_helper("gene_filtered_age_sex", "source_10")
+```
+6/14 source are noticeably off in gene_filtered_age_sex
+
+```{r, fig.height=3}
+pp_check_helper("gene_lof_per_gene", "source_10")
+```
+
+10/25 sources are noticeably off gene_lof_per_gene
+
+```{r, fig.height=3}
+pp_check_helper("gene_lof_per_gene_filtered_age_sex", "source_10")
+```
+
+5/14 sources are noticeably off for gene_lof_per_gene_filtered_age_sex
+
+Including source explicitly alleviates a large fraction (but not all) of the problems:
+
+```{r, fig.height=3}
+pp_check_helper("gene_source", "source_10")
+```
+
+We see 6/25 sources problematic in gene_source. However including cLOF and source makes the fit good across all sources:
+
+```{r, fig.height=3}
+pp_check_helper("gene_source_lof", "source_10")
+```
+
+```{r, fig.height=3}
+pp_check_helper("gene_source_lof", "source_10_lof")
+```
+
+
+It therefore seems that both source and cLOF are important factors.
+
+## Between-study variability mostly explains age and sex differences
+
+Age and sex differences don't necessarily need to be included, as they are sufficiently well explained by the `gene_source_lof` model. First let's look at overall prevalance by sex and age group:
+
+```{r, fig.height=3}
+pp_check_helper("gene_source_lof", c("sex","age"))
+```
+Note that missing data are treated as a separate age category.
+
+No big problems in the bulk age/sex groups. We can also look at age and sex by individual phenotypes (we collapse some of the age groups to make the age + phenotype plot readable:
+
+```{r, fig.height=3}
+pp_check_helper("gene_source_lof", c("sex_phenotype","age_phenotype"))
+```
+
+Once again only very minor problems (e.g age "20-39" for REN phenotype). We think those can be safely ignored.
+
+## Loss-of-function differences are of a relatively minor importance
+
+Using the most simple model, we see that cLOF difference are not well modelled for the CI, REP, REN and LIV phenotypes. 
+
+```{r, fig.height=3}
+pp_check_helper("gene_only", "phenotype_lof")
+```
+
+This disappears when adding a per-phenotype cLOF term to the model (i.e. for a given phenotype the effect of cLOF is assumed equal across all mutations):
+
+```{r, fig.height=3}
+pp_check_helper("gene_lof", c("phenotype_lof","gene_lof"))
+```
+
+```{r, fig.height=3}
+pp_check_helper("gene_lof_per_gene", c("phenotype_lof","gene_lof"))
+```
+
+While adding source as a covariate ameliorates the problems with cLOF (it remains problematic only for REN and LIV phenotypes)
+
+```{r, fig.height=3}
+pp_check_helper("gene_source", c("phenotype_lof","gene_lof"))
+```
+
+The problem is mitigated when both source and cLOF are included (even when cLOF effect is not allowed to vary with gene)
+
+```{r, fig.height=3}
+pp_check_helper("gene_source_lof", c("phenotype_lof","gene_lof"))
+```
+
+Having cLOF coefficient differ per gene does not bring noticeable improvements:
+
+```{r, fig.height=3}
+pp_check_helper("gene_source_lof_per_gene", c("phenotype_lof","gene_lof"))
+```
+
+
+## Model selection verdict
+
+We've shown that source has to be included and there is an advantage in including cLOF per phenotype, but not much improvement when including cLOF per phenotype adn gene. Since the `gene_source_lof_per_gene` model is too flexible for the limited amount of data (results in very wide posterior intervals, spanning odds ratio up to 10000), we think `gene_source_lof` is a better choice.
