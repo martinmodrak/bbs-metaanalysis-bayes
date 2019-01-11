@@ -27,7 +27,7 @@ age_transform_from_age <- function(age) {
 
 read_main_data <- function() {
   
-  data <- read_excel(here("private_data","EV table 2 dataset new-new.xlsx"), sheet = "List1") %>%
+  data <- read_excel(here("data","EV table 2 dataset.xlsx"), sheet = "List1") %>%
     rename(case_no = "source case n.", additional_mutations = "additional mutations", mutation_types = "mut/mut") %>%
     filter(!is.na(source) | !is.na(gene)) %>% #NA in source is only in the empty rows at the end of the table
     select(source, case_no,gene, mutation_types, 
