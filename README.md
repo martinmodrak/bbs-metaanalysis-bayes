@@ -12,3 +12,15 @@ Contents of the files:
 - `models.R` definitions of all models used in the analysis
 - `models_funcs.R` helper functions to easily fit the dataset with all models
 - `plots.R` code for all the fancy plots used in the analysis
+
+## Rerunning the analysis
+
+To rerun, you need to install `brms` whic requires `rstan`. Installing `rstan` directly with `install.package` may fail on some systems - see https://github.com/stan-dev/rstan/wiki/RStan-Getting-Started for more details.
+
+`main_analysis.Rmd` is self-sufficient and can be run directly. It fits the main model, which should be relatively quick  (20min - 1 hour).
+
+`alternative_models.Rmd` is self-sufficient and can be run directly. This will fit a large number of relatively large models and may take upwards of a day even on a powerful machine.
+
+To run `multiverse_analysis.Rmd` you need to run `alternative_models.Rmd` first, but after that it is pretty quick.  
+
+To avoid recomputing, fits are stored in the `stored_fits` directory, which is created on the fly. To save you time refitting, you can download the fits we used at: https://zenodo.org/record/2539299 (DOI: 10.5281/zenodo.2539299)
