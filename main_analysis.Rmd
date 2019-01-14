@@ -10,7 +10,7 @@ output:
 *Note: A separate supplementary file (Appendix 3) describes the multiverse analysis where we test how the results change with different modelling assumptions. All references to "multiverse analysis" in this text point to this document.*
 
 ```{r setup, echo=FALSE, message = FALSE, warning=FALSE}
-knitr::opts_chunk$set(echo=FALSE, cache = TRUE) #TODO remove cache once tweaks are done
+knitr::opts_chunk$set(echo=FALSE)
 library(rstan)
 library(brms)
 options(mc.cores = parallel::detectCores())
