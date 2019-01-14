@@ -1,7 +1,6 @@
 ---
 title: "Appendix 3: Additional multiverse analysis of BBS phenotypes"
-author: "Martin Modrák"
-date: '`r format(Sys.time(), "%d %B, %Y")`'
+author: "Veronika Neiderlova, Martin Modrak, Oksana Tsyklauri, Martina Huranova, Ondrej Stepanek"
 abstract: 'This is an appendix for the paper "Exploring the function of the BBSome using clinical data: Meta-analysis of genotype-phenotype associations in Bardet-Biedl Syndrome". Here, we compute how the conclusions of the paper hold under multiple different models. Details of the models can be found in Appendix 4. The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes or Zenodo, DOI: 10.5281/zenodo.2536748'
 output:
   pdf_document: default
@@ -13,7 +12,7 @@ output:
 
 A wide variety of models was tested. Those are briefly described in the comparison. Their exact formulations can be found in Appendix 4.   
 
-```{r setup, echo=FALSE, message = FALSE}
+```{r setup, echo=FALSE, message = FALSE, warning=FALSE}
 knitr::opts_chunk$set(echo=FALSE, cache = TRUE)
 library(rstan)
 library(brms)
@@ -63,9 +62,9 @@ min_bbsome_pairwise_for_diffs <- 5
 evaluators <- list()
 ```
 
-There is some flexibility in defining the exact model configurations consistent with a given conclusion. In general, when speaking whether there is or isn't a difference, the Bayesian model will always say "yes there is a (possibly small) difference" - the posterior probability of a difference of exactly 0 is 0. Instead we choose a threshold of a "clinically relevant effect", which for us is odds ratio outside of (`r 1/min_interesting_effect`,`r min_interesting_effect`).
+There is some flexibility in defining the exact model configurations consistent with a given conclusion. In general, when discussing whether there is or isn't a difference, the Bayesian model will always say "yes there is a (possibly small) difference" - the posterior probability of a difference of exactly 0 is 0. Instead we choose a threshold of a "clinically relevant effect", which for us is odds ratio outside of (`r 1/min_interesting_effect`,`r min_interesting_effect`) and any effect outside of these bounds is counted as "different".
 
-The exact definition of the individual conclusions follow.
+Similarly, other plain-English statements need to be transformed to an exact predicate that can be considered true or false for a given assignment of numerical values to model coefficients, to let us evaluate its posterior probability.  The exact definition of the individual tested statements follows.
 
 
 ```{r}
@@ -102,7 +101,7 @@ evaluator_lof <- function(def, fit) {
 }
 ```
   
-  *	The data suggest that BBS3 has lower severity than mutations in different functional groups of genes.
+  *	The data suggest that mutations in BBS3 have lower severity than mutations in different functional groups of genes.
     * Measured as posterior probability, that odds ratio is < 1 for at least `r min_phenotypes_for_diffs` phenotypes for at least 1/2 of pairwise gene comparisons.
   
 ```{r}
@@ -156,7 +155,7 @@ samples_diff_bbsome %>%
 
 ```
 
-  *	BBS4 phenotype is the most severe of all BBSome subunits.
+  *	BBS4 phenotype is the most severe of all BBSome-encoding genes.
     * Probability that odds for BBS4 are among the top 3 odds for at least 5 phenotypes
     * Probability that a patient with BBS4 has the highest total number of phenotypes present.
 ```{r}
@@ -215,7 +214,7 @@ evaluator_prob_group_diff_all <- function(phenotype_name, group1, group2, group1
 evaluators[["CI_BBSO3_all"]] <- evaluator_prob_group_diff_all("CI", paste0("BBS0", c(1,2,4,5,7,8,9)), "BBS03", group1_name = "BBSome")
 ```
 
-    * Cognitive impairment is more frequent in BBS7 patients compared to other patients wirh mutations in BBSome subunits.
+    * Cognitive impairment is more frequent in BBS7 patients compared to other patients with mutations in BBSome-encoding genes.
 ```{r}
 evaluators[["CI_BBS07_all"]] <-  evaluator_prob_group_diff_all("CI", "BBS07", paste0("BBS0", c(1,2,4,5,8,9)), group2_name = "others")
 
@@ -225,11 +224,11 @@ evaluators[["CI_BBS07_all"]] <-  evaluator_prob_group_diff_all("CI", "BBS07", pa
 ```{r}
 evaluators[["REN_groups_all"]] <- evaluator_prob_group_diff_all("REN", paste0("BBS0", c(2,7,9)),  paste0("BBS0", c(1,4,8)), group1_name = "BBS2,7,9", group2_name = "BBS1,4,8")
 ```
-    *	Patients with BBS2 mutations are more likely to have heart anomalies compared to patients with other BBSome mutations.
+    *	Patients with BBS2 mutations are more likely to have heart anomalies compared to patients with other mutations in BBSome-encoding genes.
 ```{r}
 evaluators[["HEART_BBS2_all"]] <-  evaluator_prob_group_diff_all("HEART", "BBS02", paste0("BBS0", c(1,4,5,7,8,9)), group2_name = "others")
 ```
-    *	Patients with BBS5 mutations are more likely to have liver anomalies compared to patients with other BBSome mutations.
+    *	Patients with BBS5 mutations are more likely to have liver anomalies compared to patients with other mutations in BBSome-encoding genes.
 ```{r}
 evaluators[["LIVER_BBS5_all"]] <-  evaluator_prob_group_diff_all("LIV", "BBS05", paste0("BBS0", c(1,2,4,7,8,9)), group2_name = "others")
 ```
@@ -257,25 +256,25 @@ evaluator_prob_pairwise_diff <- function(phenotype_name, gene_more_frequent, gen
 evaluators[["PD_BBS02_BBS01"]] <- evaluator_prob_pairwise_diff("PD","BBS02","BBS01")
 ```
 
-    * Polydactyly is more frequent in BBS10 patients compared to BBS1 patients
+    * Polydactyly is more frequent in BBS10 patients compared to BBS1 patients.
 ```{r}
 evaluators[["PD_BBS10_BBS01"]] <- evaluator_prob_pairwise_diff("PD","BBS10","BBS01")
 
 ```
 
-    *	Renal involvment is less frequent in BBS1 patients compared to BBS2 patients.
+    *	Renal involvement is less frequent in BBS1 patients compared to BBS2 patients.
 ```{r}
 evaluators[["REN_BBS1_BBS2"]] <- evaluator_prob_pairwise_diff("REN","BBS02","BBS01")
 ```
-    *	Renal involvment is less frequent in BBS1 patients compared to BBS10 patients.
+    *	Renal involvement is less frequent in BBS1 patients compared to BBS10 patients.
 ```{r}
 evaluators[["REN_BBS1_BBS10"]] <- evaluator_prob_pairwise_diff("REN","BBS10","BBS01")
 ```
-    *	Liver involvment is less frequent in BBS1 patients compared to BBS2 patients.
+    *	Liver involvement is less frequent in BBS1 patients compared to BBS2 patients.
 ```{r}
 evaluators[["LIV_BBS1_BBS2"]] <- evaluator_prob_pairwise_diff("LIV","BBS02","BBS01")
 ```
-    *	Liver involvment is less frequent in BBS1 patients compared to BBS10 patients.
+    *	Liver involvement is less frequent in BBS1 patients compared to BBS10 patients.
 ```{r}
 evaluators[["LIV_BBS1_BBS10"]] <- evaluator_prob_pairwise_diff("LIV","BBS10","BBS01")
 ```
@@ -318,7 +317,7 @@ evaluation <- all_models %>%
 
 ```{r load_freqentist}
 #Freq. conclusions contain order
-freq_conclusions <- readr::read_csv(here("private_data","BBS - Frequentist conclusions - p.csv"), col_types = cols(
+freq_conclusions <- readr::read_csv(here("data","BBS - Frequentist conclusions - p.csv"), col_types = cols(
   Conclusion = col_character(),
   `p-value-all` = col_double(),
   `p-value-cLOF` = col_double(),
@@ -394,13 +393,13 @@ conclusions_plot
 
 ```
 
-Heatmap of posterior probability of statements characterizing individual conclusions. All Bayesian models include gene as covariate but may also include additional covarietes: source, age, sex and certain loss of function (cLOF) - either as a global covariete or by gene. Since age and sex are not available for all data, we can either fit the model only to patients where those are reported (filtered) or impute missing data (imputed). Instead of using cLOF as a covariate, we can fit the model using only patients with cLOF mutations (filtered cLOF). For most models we include a correlation structure across phenotypes (e.g., that two phenotypes occur frequently together across all genes), but this structure may be absent (no corr.) or replaced with a correlation structure across genes (gene corr. - e.g., that two genes have similar pattern of effects across all phenotypes). We also tried modifying the width of prior distributions (wide, narrow, very narrow). See supplementary material for a detailed description of all models and the imputation procedure. Dark grey indicates that the question could not be evaluated for the given model (currently only asking for cLOF differences in models that exclude cLOF). The "Bad fits" category is reserved for models we now fit the data badly, as discussed in Appendix 4.
+A heatmap of posterior probability of statements characterizing individual conclusions. All Bayesian models include gene as covariate but may also include additional covarietes: source, age, sex and certain loss of function (cLOF) - either as a global covariate or by gene. Since age and sex are not available for all data, we can either fit the model only to patients where those are reported (filtered) or impute missing data (imputed). Instead of using cLOF as a covariate, we can fit the model using only patients with cLOF mutations (filtered cLOF). For most models we include a correlation structure across phenotypes (e.g., that two phenotypes occur frequently together across all genes), but this structure may be absent (no corr.) or replaced with a correlation structure across genes (gene corr. - e.g., that two genes have similar pattern of effects across all phenotypes). We also tried modifying the width of prior distributions (wide, narrow, very narrow). See Appendix 4 for a detailed description of all models and the imputation procedure. Dark grey indicates that the question could not be evaluated for the given model (currently only asking for cLOF differences in models that exclude cLOF). The "Bad fits" category is reserved for models we now fit the data badly, as discussed in Appendix 4.
 
 Some patterns to notice:
 
 * When fitting filtered datasets, there is less certainty implying less strong evidence in both directions
-* Using very narrow priors on gene coefficients ($N(0,0.1)$, i.e. that almost all odds ratios should be less than $\sim 1.2$) unsurprisingly results in little evidence for directional differences between genes.
-* Other than that the conclusions are not sensitive to model choice.
+* Using very narrow priors on gene coefficients ($N(0,0.1)$, i.e., that almost all odds ratios should be less than $\sim 1.2$) unsurprisingly results in little evidence for directional differences between genes.
+* Other than noted above, the conclusions are not sensitive to model choice.
 
 # Combining with frequentist results
 
@@ -489,6 +488,14 @@ combined_conclusions_main_plot %>% ggsave(here("tmp_pics","conclusions_main.pdf"
 ```
 
 # Original Computing Environment
+
+
+```{r}
+git_rev <- tryCatch({system("git rev-parse HEAD", intern=TRUE)}, error = function(e) {"Could not read Git revision"})
+```
+
+This report was built from Git revision ``r git_rev`` on `r format(Sys.time(), "%d %B, %Y")`
+
 
 ```{r}
 sessionInfo()

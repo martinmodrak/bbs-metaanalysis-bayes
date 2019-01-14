@@ -1,7 +1,6 @@
 ---
-title: "Appendix 2: Bayesian Metaanalysis of BBS phenotypes"
-author: "Martin Modrák"
-date: '`r format(Sys.time(), "%d %B, %Y")`'
+title: "Appendix 2: Bayesian Meta-analysis of BBS phenotypes"
+author: "Veronika Neiderlova, Martin Modrak, Oksana Tsyklauri, Martina Huranova, Ondrej Stepanek"
 abstract: 'This is an appendix for the paper "Exploring the function of the BBSome using clinical data: Meta-analysis of genotype-phenotype associations in Bardet-Biedl Syndrome". This document describes the Bayesian analysis reported in the main manuscript. The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes or Zenodo, DOI: 10.5281/zenodo.2536748'
 output:
   pdf_document: 
@@ -10,7 +9,7 @@ output:
 
 *Note: A separate supplementary file (Appendix 3) describes the multiverse analysis where we test how the results change with different modelling assumptions. All references to "multiverse analysis" in this text point to this document.*
 
-```{r setup, echo=FALSE, message = FALSE}
+```{r setup, echo=FALSE, message = FALSE, warning=FALSE}
 knitr::opts_chunk$set(echo=FALSE, cache = TRUE) #TODO remove cache once tweaks are done
 library(rstan)
 library(brms)
@@ -75,7 +74,7 @@ genes_to_show <- genes_to_show_from_data(data)
 data_long <- data_long_from_data(data)
 ```
 
-On the other hand, we only include eight phenotypes in the model as those are our primary interest and including all phenotypes notably increased the computational burden of fitting the models.
+The phenotypes present in the data are:
 
 ```{r}
 phenotypes_to_use
@@ -99,14 +98,14 @@ data_long %>%
   theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5))
 ```
 
-Here, every point represents the proportion of patients with a given mutation that manifested a given phenotype in one study. The point size represents the number of patients with the mutation in the study. We see that even studies with a relatively large number of patients do show very different proportions. We are therefore confident that allowing for between-study heterogeneity is important for analysing the data correctly. In the attached multiverse analysis, we also attempted to model the studies as homogenous and found it to be a bad fit.
+Here, every point represents the proportion of patients with a given mutation that manifested a given phenotype in one study. The point size represents the number of patients with the mutation in the study. We see that even studies with a relatively large number of patients show very different proportions. We are therefore confident that allowing for between-study heterogeneity is important for analyzing the data correctly. In the attached multiverse analysis, we also attempted to model the studies as homogenous and found it to be a bad fit.
 
 # Handling missingness
 
 The most problematic missing data problem is the missingness in phenotype data. There are two distinct sources of missingness: a) a study missing the phenotype value for only some patients or b) a study not reporting the status of the phenotype for any patient. 
 Our analysis assumes the phenotype data to be missing at random, i.e. that the decision to not report a given phenotype in a study and missingness for individual patients is independent of the prevalence of the phenotype in the study population. This is probably not true for missingness at the study level, as investigators are plausibly more likely to report more prevalent phenotypes and more likely to ignore phenotype that was not observed in any patient. Similarly, if data for a specific patient omits a given phenotype (the state of the phenotype is reported as missing data in the original study), it is more likely the phenotype was not present. 
 
-However, in our analysis we were unable to find a good way to account for this phenomenon. But since we focus on comparison of individual phenotype prevalence across different mutations within a single study and do not compare phenotypes against each other, this should only be a significant issue if the rate of missingness in phenotype values is correlated with the prevalence of individual mutations present in a study (e.g. if studies with high obesity missingness would also tend to have overabundance of mutations in BBS3). Let's check whether this is the case:
+However, in our analysis we were unable to find a good way to account for this phenomenon. But since we focus on comparison of individual phenotype prevalence across different mutations within a single study and do not compare phenotypes against each other, this should only be a significant issue if the rate of missingness in phenotype values is correlated with the prevalence of individual mutations present in a study (e.g., if studies with high obesity missingness would also tend to have overabundance of mutations in BBS3). Let's check whether this is the case:
 
 ```{r}
 phenotype_stats <- data_long %>% 
@@ -189,12 +188,12 @@ studies_less_than_5 <- round(mean(mut_in_study$count < 5) * 100)
 ```
 
 
-The red line shows the true prevalance of a phenotype (assuming it is the same across multiple studies). Each point shows the observed prevalence of a single possible realization of a study. We see that the observed prevalence can differ substantially from the true value and that the spread decreases with increasing $n$. In our data we can't however expect large $n$ as the biggest $n$ we have is (`r max_mut_in_study$source`) with `r max_mut_in_study$count` patients having mutation in `r max_mut_in_study$gene` and in `r studies_less_than_5`% of cases there are less than 5 patients with a given mutation in the same study. 
+The red line shows the true prevalence of a phenotype (assuming it is the same across multiple studies). Each point shows the observed prevalence of a single possible realization of a study. We see that the observed prevalence can differ substantially from the true value and that the spread decreases with increasing $n$. In our data we can't however expect large $n$ as the biggest $n$ we have is (`r max_mut_in_study$source`) with `r max_mut_in_study$count` patients having mutation in `r max_mut_in_study$gene` and in `r studies_less_than_5`% of cases there are less than 5 patients with a given mutation in the same study. 
 Also note that the observed values are clustered at discrete "levels" because e.g., among 5 patients you only can have prevalence of 0.2 or 0.4 and nothing in between. Further, you can see that with high prevalence, there is less variation in the observed prevalence.
 
 For mathematical convenience, the model does not work with prevalence directly, but with *odds*. Odds are just another way to express prevalence - for example, when the prevalence is $20\%$, we expect one patients to exhibit the phenotype for each four patients not exhibiting the phenotype, leading to odds $1:4$ or $0.25$ and log odds (base 10 here) of roughly $-0.6$. Unlike prevalence, which is constrained between 0 and 1,  odds can be any non-negative number. 
 
-Most of the results of the model are reported as comparisons of odds in different populations. For this we use the ratio of the corresponding odds. E.g. when the odds ratio is 2, we expect the first population to have twice as much patients exhibiting the phenotype for each healthy patient than the second population.
+Most of the results of the model are reported as comparisons of odds in different populations. For this we use the ratio of the corresponding odds. E.g., when the odds ratio is 2, we expect the first population to have twice as much patients exhibiting the phenotype for each healthy patient than the second population.
 
 Technically the model works with the logarithm of odds. The logit function trasnforms a probability (prevalence) to log odds, hence the logit "link" used in the model. What is the linear part?
 
@@ -220,14 +219,14 @@ The cLOF coefficient is held constant for all genes in a given phenotype, meanin
 This is the "linear" part of the model - we multiply odds, which is the same as adding the logarithm of the odds and addition is a neatly linear thing. 
 
 Now the "hierarchical" part. This ties the coefficients in the model in two important ways:
- a) it assumes small differences in odds across genes and studies are more likely than large differences and updates the estimates accordingly
- b) *partial pooling*: the degree to which odds are allowed to "jump around" across both genes and studies is informed by the data, e.g. if the odds are similar for all genes except one, the model will put higher weight on the possibility that the difference in the last mutation is just noise and shrink its estimate towards the average for other genes. On the other hand if the odds vary wildly across all genes, the model will assume it is more likely this is a true variation and not shrink the estimate much. The amount of shrinkage also depends on the number of observations as estimates where there is a larger number of observations are shrunk less. The variability across studies is pooled in a similar way.
+ i) it assumes small differences in odds across genes and studies are more likely than large differences and updates the estimates accordingly
+ ii) *partial pooling*: the degree to which odds are allowed to "jump around" across both genes and studies is informed by the data, e.g., if the odds are similar for all genes except one, the model will put higher weight on the possibility that the difference in the last mutation is just noise and shrink its estimate towards the average for other genes. On the other hand, if the odds vary wildly across all genes, the model will assume it is more likely this is a true variation and not shrink the estimate much. The amount of shrinkage also depends on the number of observations as estimates where there is a larger number of observations are shrunk less. The variability across studies is pooled in a similar way.
 
 Together those two features result in low risk of overfitting the data, even though we have very little observations for most study - gene - phenotype combinations.
 
-We also allow for a correlation between phenotypes, e.g. that some phenotypes occur freqently together while others rarely manifest in the same patient. Once again the amount of correlation is estimated from data.
+We also allow for a correlation between phenotypes, e.g., that some phenotypes occur frequently together while others rarely manifest in the same patient. Once again the amount of correlation is estimated from data.
 
-Finally, the "Bayesian" part: We follow the Bayesian paradigm, so our estimates of the model coefficients are not a single number, but rather a distribution - some values are more likely than others, but the data are insufficient to let us determine the coefficients with high certainty. Therefore we never report exact numbers but rather 50% and 95% *credible intervals* of the distribution. Unlike confidence intervals in frequentist analysis, we can directly interpret the 95% credible interval as the interval that contains the true value with 95% probability - assuming our model is correct (which it is not, but we hope it is still a useful abstraction).
+Finally, the "Bayesian" part: We follow the Bayesian paradigm, so our estimates of the model coefficients are not a single number, but rather a distribution - some values are more likely than others, but the data are insufficient to let us determine the coefficients with high certainty. Therefore, we never report exact numbers but rather 50% and 95% *credible intervals* of the distribution. Unlike confidence intervals in frequentist analysis, we can directly interpret the 95% credible interval as the interval that contains the true value with 95% probability - assuming our model is correct (which it is not, but we hope it is still a useful abstraction).
 
 # The model - mathematical formulation
 
@@ -280,7 +279,7 @@ The $N(0, 2)$ priors on the various parameters are mildly skeptical in that they
 
 # Main results
 
-First a summary of the model fit as posterior intervals for main model parameters: 
+First, a summary of the model fit as posterior intervals for main model parameters: 
 
 ```{r}
 fit <- fit_base_model(main_model_def, data_long)
@@ -295,9 +294,9 @@ data_for_prediction_BBSome <- data_for_prediction %>% filter(functional_group_fo
 
 The fitted model parameters themselves are however hard to interpret, as they operate on log odds scale. It is also hard to say how to handle the between-study variability of coefficients. And this variability  is substantial - note that the `sd` parameters under `~source` (corresponding to $\sigma_3$) admit ranges from $\sim 1.1$ to $\sim 5.1$, so the odds of a phenotype, given a mutation can plausibly differ between studies by $1.96 \times \pm 1.1 = \pm 2.16$ to $1.96 \times \pm 5.09 = \pm 9.99$ _on the log scale_ (95% of mass of a normal distribution is within $1.96 \times \sigma$ from the mean). 
 
-Instead we will focus on model predictions. In particular, the results we report can be interpreted as if a new study is drawn at random from the same population of studies as we used (i.e. matching all the inclusion criteria) and we directly observe true odds of all phenotypes for all mutations in this study. That is, the predictions do include between-study variability, our uncertainty about the population of studies, our uncertainty about overall prevalence of the individual phenotypes, our uncertainty about the strength of links between mutations and phenotypes and our uncertainty about correlations between the presence of individual phenotypes. The predictions do NOT include the sampling uncertainty of the hypothethical new study. For example when the hypothetical study has the true odds of a phenotype, given a mutation in BBS12, equal to $1:2$ ($0.5$), a study on 20 patients can easily observe odds of $3:17$ ($0.18$) or $11:9$ ($1.22$) simply due to chance, but we will treat the hypothetical study here as having odds of $0.5$ and ignore this additional noise in our results.
+Instead, we will focus on model predictions. In particular, the results we report can be interpreted as if a new study is drawn at random from the same population of studies as we used (i.e. matching all the inclusion criteria) and we directly observe true odds of all phenotypes for all mutations in this study. That is, the predictions do include between-study variability, our uncertainty about the population of studies, our uncertainty about overall prevalence of the individual phenotypes, our uncertainty about the strength of links between mutations and phenotypes and our uncertainty about correlations between the presence of individual phenotypes. The predictions do NOT include the sampling uncertainty of the hypothetical new study. For example when the hypothetical study has the true odds of a phenotype, given a mutation in BBS12, equal to $1:2$ ($0.5$), a study on 20 patients can easily observe odds of $3:17$ ($0.18$) or $11:9$ ($1.22$) simply due to chance, but we will treat the hypothetical study here as having odds of $0.5$ and ignore this additional noise in our results.
 
-Since those odds can vary wildly between studies, we will focus on various odds ratios (OR) within a single hypothethical study.
+Since those odds can vary wildly between studies, we will focus on various odds ratios (OR) within a single hypothetical study.
 
 # Summary for functional groups
 
@@ -306,7 +305,7 @@ differences_func_group_plot <- plot_gene_phenotype_differences_estimates(fit, da
 differences_func_group_plot
 ```
 
-The plot above shows posterior 95% (thin) and 50% (thick) credible intervals for ratio of odds for a phenotype given a random mutation within a functional group to odds for the phenotype given a random mutation across all groups shown. All mutations are assumed to be equally likely - the odds are not weighed by the frequency of the mutations in the dataset. Odds ratios are shown on the log scale and each phenotype has its own scale. Gray dots show the same odds ratio calculated for individual studies included in the metanalysis. Dots outside the dashed lines correspond to studies where the empirical odds ratio is 0 or infinity. Dot size represents the number of relevant cases in the study.
+The plot above shows posterior 95% (thin) and 50% (thick) credible intervals for ratio of odds for a phenotype given a random mutation within a functional group to odds for the phenotype given a random mutation across all groups shown. All mutations are assumed to be equally likely - the odds are not weighed by the frequency of the mutations in the dataset. Odds ratios are shown on the log scale and each phenotype has its own scale. Gray dots show the same odds ratio calculated for individual studies included in the meta-analysis. Dots outside the dashed lines correspond to studies where the empirical odds ratio is 0 or infinity. Dot size represents the number of relevant cases in the study.
 
 ## Summary for BBSome genes
 
@@ -316,7 +315,7 @@ differences_bbsome_plot <- plot_gene_phenotype_differences_estimates(fit, data_f
 differences_bbsome_plot 
 ```
 
-The plot above shows posterior 95% (thin) and 50% (thick) credible intervals for ratio of odds for a phenotype given a mutation in a gene to odds for the phenotype given a random mutation across all genes shown. All mutations are assumed to be equally likely - the odds are not weighed by the frequency of the mutations in the dataset. Odds ratios are shown on the log scale and each phenotype has its own scale. Gray dots show the same odds ratio calculated for individual studies included in the metanalysis. Dots below the dashed lines correspond to studies where the empirical odds ratio is 0 or infinity. Dot size represents the number of relevant cases in the study.
+The plot above shows posterior 95% (thin) and 50% (thick) credible intervals for ratio of odds for a phenotype given a mutation in a gene to odds for the phenotype given a random mutation across all genes shown. All mutations are assumed to be equally likely - the odds are not weighed by the frequency of the mutations in the dataset. Odds ratios are shown on the log scale and each phenotype has its own scale. Gray dots show the same odds ratio calculated for individual studies included in the meta-analysis. Dots below the dashed lines correspond to studies where the empirical odds ratio is 0 or infinity. Dot size represents the number of relevant cases in the study.
 
 
 ## Summary for Chaperonins
@@ -334,7 +333,7 @@ This is the same plot as for the BBSome genes, only showing the members of the c
 
 # Pairwise comparisons of mutations in BBSome genes
 
-The summary plots above are not well suited to infer pairwise comparisons, as the estimates for the individual genes / functional groups are not independent. In particular, non overlapping marginal credible intervals in the summary plot implies that there is a consistent difference, but the converse is not true. If there is a strong positive correlation, there might be a consistent difference even when the above plot would show mostly overlapping marginal posterior intervals.
+The summary plots above are not well suited to infer pairwise comparisons, as the estimates for the individual genes / functional groups are not independent. In particular, non-overlapping marginal credible intervals in the summary plot imply that there is a consistent difference, but the converse is not true. If there is a strong positive correlation, there might be a consistent difference even when the above plot would show mostly overlapping marginal posterior intervals.
 
 Pairwise comparisons also have the benefit of better interpretability as we do not need to rely on odds ratio of the phenotype against some average which might not be clinically meaningful. In pairwise comparisons we can directly work with odds ratios for the phenotype given the two mutations in question.
 
@@ -361,7 +360,7 @@ plot_pairwise_differences(main_model_def, fit, data_for_prediction_BBSome, plot_
 The most extreme (furthest from one) pairwise odds ratios within 95% posterior credible intervals.
 The direction of the effect is not reported as effects in both directions might be similarly plausible - the  odds ratio are transformed to be larger than one in all cases.
 
-This shows maximal differences consistent with our model and lets us constrain the differences between mutations for some phenotypes. We see that the data does not let us to put tight constraints on most differences - the tightest we get is OR of 3 - which would still be a very important difference in the clinic.
+This shows maximal differences consistent with our model and lets us constrain the differences between mutations for some phenotypes. We see that the data does not let us to put tight constraints on most differences - the tightest we get is OR of 3 - which would still be a very important difference for the clinical prognosis.
 
 ## Everything at once
 
@@ -370,7 +369,7 @@ plot_pairwise_differences(main_model_def, fit, data_for_prediction_BBSome, plot_
 
 ```
 
-Posterior 95% (thin) and 50% (thick) credible intervals for odds ratio for a phenotype given mutation in the gene on horizontal axis against the gene on the vertical axis. Color indicates the widest central posterior credible interval that does not include one. We deliberately not make any strong cutoff at 95% excluding zero or similar as the tail probabilities have high variance (e.g. where there is less data, one extra positive case could plausibly move this quantity from say 93% to 96%) . Odds ratio are shown on the log scale.
+Posterior 95% (thin) and 50% (thick) credible intervals for odds ratio for a phenotype given mutation in the gene on horizontal axis against the gene on the vertical axis. Color indicates the widest central posterior credible interval that does not include one. We deliberately not make any strong cutoff at 95% excluding zero or similar as the tail probabilities have high variance (e.g., where there is less data, one extra positive case could plausibly move this quantity from say 93% to 96%). Odds ratio are shown on the log scale.
 
 This plot integrates the information shown in the plots above and some more.
 
@@ -438,7 +437,7 @@ for(type in types) {
 
 # Extra inspection of the LIV phenotype
 
-For the LIV phenotype the frequentist analysis disagrees with the Bayesian analysis presented here. In particular, the frequentist analysis shows BBS3 as lest likely to result in LIV and Chaperonins as most likely, while the analysis shown here reports exactly opposite trend. First let's look at aggregate frequencies of LIV phenotype:
+For the LIV phenotype the frequentist analysis disagrees with the Bayesian analysis presented here. In particular, the frequentist analysis shows BBS3 as least likely to result in LIV and chaperonins as most likely, while the analysis shown here reports exactly opposite trend. First, let's look at aggregate frequencies of LIV phenotype:
 
 ```{r}
 data_long %>% filter(phenotype == "LIV") %>% group_by(functional_group) %>%
@@ -471,7 +470,7 @@ This plot tells a different story: most individual studies, especially those wit
 
 It however seems that the evidence in this direction is not very compelling.
 
-For a complete picture, let's look at pairwise differences between the 3 most common BBSome mutations (BBS1, BBS2 and BBS4), BBS3 and the Chaperonins (BBS6, BBS10, BBS12). 
+For a complete picture, let's look at pairwise differences between the 3 most common BBSome mutations (BBS1, BBS2 and BBS4), BBS3 and the chaperonins (BBS6, BBS10, BBS12). 
 
 ```{r, fig.width=10, fig.height=7}
 data_for_prediction_LIV <- tibble(gene = c("BBS1", "BBS2", "BBS4", "BBS3", "BBS6", "BBS10", "BBS12"), source = "new_source", loss_of_function_certain = 1) %>%
@@ -481,11 +480,20 @@ plot_pairwise_differences(main_model_def, fit, data_for_prediction_LIV, plot_typ
 
 ```
 
-We see that for the LIV phenotype there is large uncertainty and all 95% intervals include one. We also see that the large differences we've seen in the summary plots for CI and REN do translate into a quite confident estimates of notable pairwise differences between most BBSome genes, BBS3 and Chaperonins.
+We see that for the LIV phenotype there is large uncertainty and all 95% intervals include one. We also see that the large differences we have seen in the summary plots for CI and REN do translate into a quite confident estimates of notable pairwise differences between most BBSome genes, BBS3, and chaperonins.
 
 # Original computing environment
 
+
 ```{r}
+git_rev <- tryCatch({system("git rev-parse HEAD", intern=TRUE)}, error = function(e) {"Could not read Git revision"})
+```
+
+This report was built from Git revision ``r git_rev`` on `r format(Sys.time(), "%d %B, %Y")`
+
+
+```{r}
+
 sessionInfo()
 ```
 
