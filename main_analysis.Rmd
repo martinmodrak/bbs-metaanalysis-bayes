@@ -1,6 +1,5 @@
 ---
 title: "Appendix 2: Bayesian Meta-analysis of BBS phenotypes"
-author: "Veronika Neiderlova, Martin Modrak, Oksana Tsyklauri, Martina Huranova, Ondrej Stepanek"
 abstract: 'This is an appendix for the paper "Exploring the function of the BBSome using clinical data: Meta-analysis of genotype-phenotype associations in Bardet-Biedl Syndrome". This document describes the Bayesian analysis reported in the main manuscript. The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes or Zenodo, DOI: 10.5281/zenodo.2536748'
 output:
   pdf_document: 
@@ -485,7 +484,7 @@ We see that for the LIV phenotype there is large uncertainty and all 95% interva
 # Original computing environment
 
 
-```{r}
+```{r, cache=FALSE}
 git_rev <- tryCatch({system("git rev-parse HEAD", intern=TRUE)}, error = function(e) {"Could not read Git revision"})
 ```
 
