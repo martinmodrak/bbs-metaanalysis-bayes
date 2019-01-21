@@ -7,11 +7,11 @@ output:
 
 
 
-*Note: For historical reasons the feature of "certain loss of function" (cLOF) as discussed in the data is called just "lof" in most analysis code. This appendix will thus use "lof" and "cLOF" interchangeably.*
+*Note: For historical reasons the feature of "certain loss of function" (cLOF) as discussed in the data is called just "lof" in most analysis code. This part will thus use "lof" and "cLOF" interchangeably.*
 
-A wide variety of models was tested. Those are briefly described in the comparison. Their exact formulations can be found in Appendix 4.   
+A wide variety of models was tested. Those are briefly described in the comparison. Their exact formulations can be found in Part 2.   
 
-```{r setup, echo=FALSE, message = FALSE, warning=FALSE}
+```{r setup_multiverse, echo=FALSE, message = FALSE, warning=FALSE}
 knitr::opts_chunk$set(echo=FALSE, cache = TRUE)
 library(rstan)
 library(brms)
@@ -51,7 +51,7 @@ all_fits <- all_models %>% map(function(def) {
 })
 ```
 
-# Defining Precise Criteria
+## Defining Precise Criteria
 
 ```{r}
 min_interesting_effect <- 2
@@ -280,7 +280,7 @@ evaluators[["LIV_BBS1_BBS10"]] <- evaluator_prob_pairwise_diff("LIV","BBS10","BB
     
 
 
-# Bayesian Comparison
+## Bayesian Comparison
 
 ```{r compute_evaluation}
 models_for_test <- all_models[c("gene_source_lof","gene_source_filtered_lof","gene_imputed_age_sex")]
@@ -400,7 +400,7 @@ Some patterns to notice:
 * Using very narrow priors on gene coefficients ($N(0,0.1)$, i.e., that almost all odds ratios should be less than $\sim 1.2$) unsurprisingly results in little evidence for directional differences between genes.
 * Other than noted above, the conclusions are not sensitive to model choice.
 
-# Combining with frequentist results
+## Combining with frequentist results
 
 ```{r}
 build_freq_conclusions_plot <- function(freq_conclusions, categories = TRUE) {
@@ -484,19 +484,5 @@ combined_conclusions_main_plot
 ```{r}
 combined_conclusions_plot %>% ggsave(here("tmp_pics","conclusions.pdf"), ., width = 9, height = 4.5)
 combined_conclusions_main_plot %>% ggsave(here("tmp_pics","conclusions_main.pdf"), ., width = 7, height = 3.8)
-```
-
-# Original Computing Environment
-
-
-```{r, cache=FALSE}
-git_rev <- tryCatch({system("git rev-parse HEAD", intern=TRUE)}, error = function(e) {"Could not read Git revision"})
-```
-
-This report was built from Git revision ``r git_rev`` on `r format(Sys.time(), "%d %B, %Y")`
-
-
-```{r}
-sessionInfo()
 ```
 

@@ -1,0 +1,53 @@
+---
+title: 'Appendix for "Exploring the function of the BBSome using clinical data: Meta-analysis of genotype-phenotype associations in Bardet-Biedl Syndrome"'
+output:
+  pdf_document: 
+     toc: true
+---
+
+This document consists of three parts: 
+  * Part 1 describes the Bayesian analysis reported in the main manuscript.  
+  * Part2 describes all Bayesian models we tried throughout this project and discusses the reasoning behind our choice of model for the main analysis, in particular why between-study variability is crucial and taking into account complete loss of function (cLOF) useful while age, and sex can be omitted. 
+  * Part 3 shows how the conclusions of the paper hold under multiple different models. 
+
+The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes or Zenodo, DOI: 10.5281/zenodo.2545609
+
+```{r setup, echo=FALSE, message = FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo=FALSE, cache = TRUE)
+```
+
+\newpage
+
+# Part 1: Main Bayesian Analysis
+
+```{r child_main, child = 'main_analysis.Rmd'}
+```
+
+\newpage
+
+# Part 2: Alternative Models & Model Selection
+
+```{r child_alternative, child = 'alternative_models.Rmd'}
+```
+
+
+\newpage
+
+# Part 3: Multiverse Analysis
+
+```{r child_multiverse, child = 'multiverse_analysis.Rmd'}
+```
+
+\newpage
+
+# Original computing environment
+
+```{r, cache=FALSE}
+git_rev <- tryCatch({system("git rev-parse HEAD", intern=TRUE)}, error = function(e) {"Could not read Git revision"})
+```
+
+This report was built from Git revision ``r git_rev`` on `r format(Sys.time(), "%d %B, %Y")`
+
+```{r}
+sessionInfo()
+```
