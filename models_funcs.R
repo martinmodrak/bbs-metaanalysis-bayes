@@ -2,9 +2,10 @@ filter_data_by_model_def <- function(def, data_long) {
   switch (def$filter,
           "none" = data_long,
           "lof" = data_long %>% filter(loss_of_function == "certain"),
+          "family" = data_long %>% filter(!is.na(family_id)),
           "age" = data_long %>% filter(!is.na(age_std_for_model)),
-          "sex" = data_long %>% filter(!is.na(Sex)),
-          "age_sex" = data_long %>% filter(!is.na(age_std_for_model), !is.na(Sex)),
+          "sex" = data_long %>% filter(!is.na(sex)),
+          "age_sex" = data_long %>% filter(!is.na(age_std_for_model), !is.na(sex)),
           stop("Unrecognized filter")
   )  
 }
@@ -12,7 +13,7 @@ filter_data_by_model_def <- function(def, data_long) {
 
 stored_fits_dir <- "stored_fits"
 
-fit_base_model <- function(def, data_long) {
+fit_base_model <- function(def, data_long, ...) {
   if(is.null(def)) {
     stop("Invalid def")
   }
@@ -28,7 +29,7 @@ fit_base_model <- function(def, data_long) {
   data <- filter_data_by_model_def(def, data_long)
   
   brm(formula = def$formula, data = data, prior = def$priors, file = here(stored_fits_dir,def$name),
-      control = list(adapt_delta = 0.95))   
+      control = list(adapt_delta = 0.95), ...)   
 }
 
 fit_imputed_model <- function(def, data_imputed) {
@@ -57,6 +58,10 @@ data_for_prediction_base_model <- function(def, genes_to_show, phenotypes_to_sho
   if("source" %in% def$additional_components) {
     result$source = "new_source" #A new factor level
   }
+
+  if("family" %in% def$additional_components) {
+    result$family_id = "new_family" #A new factor level
+  }
   
   if("lof" %in% def$additional_components || "lof per gene" %in% def$additional_components) {
     result$loss_of_function_certain = 1
@@ -70,7 +75,7 @@ data_for_prediction_base_model <- function(def, genes_to_show, phenotypes_to_sho
   }
   
   if("sex" %in% def$additional_components) {
-    result <- result %>% crossing(tibble(Sex = sexes))
+    result <- result %>% crossing(tibble(sex = sexes))
   }
   
   result
@@ -102,7 +107,7 @@ get_samples_pairwise_diff <- function(model_def, samples_tidy) {
     switch(component,
            "lof" = c("loss_of_function_certain" = "loss_of_function_certain"),
            "age" = c("age_std_for_model" = "age_std_for_model"),
-           "sex" = c("Sex" = "Sex"),
+           "sex" = c("sex" = "sex"),
            "source" = c()
     )
   }

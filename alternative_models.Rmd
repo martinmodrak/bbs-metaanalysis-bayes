@@ -37,7 +37,7 @@ compute_pp_checks <- TRUE
 
 ## Model descriptions
 
-All models are Bayesian varying intercept logistic regressions using the `brms` package. Appendix 2 (main analysis) includes both accessible and complete mathematical description of the model we chose for the main analysis, which will not be repeated here. Generally, all of the terms in the models are varying intercepts, i.e. the model partially pool the estimates for individual groups (genes, sources, ...) towards population mean to achieve more robust inference.
+All models are Bayesian varying intercept logistic regressions using the `brms` package. Part 1 of this supplement includes both accessible and complete mathematical description of the model we chose for the main analysis, which will not be repeated here. Generally, all of the terms in the models are varying intercepts, i.e. the model partially pool the estimates for individual groups (genes, sources, ...) towards population mean to achieve more robust inference.
 
 
 
@@ -74,7 +74,7 @@ fits_base <- models_base %>%
 
 ### Imputation with mice
 
-Including age or sex in the base models is problematic as it involves tossing out `r round(100 * mean(is.na(data$age)))`% or `r round(100 * mean(is.na(data$Sex)))`% of data, respectively. This results in wide posterior intervals and weak inferences. To try to ameliorate this we also tested running models on datasets with age and sex imputed, using multiple imputation via the `mice` package. We assume that both age and sex can be related to the functional group of the mutation and to each other. Involving further relations (e.g., individual genes) led to warnings from the `mice` package and we thus didn't use those.
+Including age or sex in the base models is problematic as it involves tossing out `r round(100 * mean(is.na(data$age)))`% or `r round(100 * mean(is.na(data$sex)))`% of data, respectively. This results in wide posterior intervals and weak inferences. To try to ameliorate this we also tested running models on datasets with age and sex imputed, using multiple imputation via the `mice` package. We assume that both age and sex can be related to the functional group of the mutation and to each other. Involving further relations (e.g., individual genes) led to warnings from the `mice` package and we thus didn't use those.
 
 ```{r mice_impute, message=FALSE, echo=FALSE, results="hide"}
 set.seed(20181217)
@@ -82,11 +82,11 @@ predictor_matrix <- matrix(0, nrow = 2, ncol = ncol(data))
 colnames(predictor_matrix) <- names(data)
 
 predictor_matrix[, c("functional_group")] <- 1
-predictor_matrix[1, c("Sex")] <- 1
+predictor_matrix[1, c("sex")] <- 1
 predictor_matrix[2, c("age_std_for_model")] <- 1
 
 mice_m = 5
-data_mice <- mice(data, m = mice_m, blocks = list("age_std_for_model", "Sex"), predictorMatrix = predictor_matrix)
+data_mice <- mice(data, m = mice_m, blocks = list("age_std_for_model", "sex"), predictorMatrix = predictor_matrix)
 if(!is.null(data_mice$loggedEvents)) {
   data_mice$loggedEvents %>% select(dep, meth, out) %>% distinct()
 }

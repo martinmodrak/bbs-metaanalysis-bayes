@@ -97,7 +97,7 @@ run_pp_checks <- function(model_def, fit, data_long,
     (my_ppc_bars_grouped(observed, predicted, group = interaction(data$functional_group, data$phenotype)) + ggtitle(paste0("PPCheck group + phenotype for ", model_def$name))) %>% out_func
   }
   
-  sex_fct <- factor(if_else(is.na(data$Sex), "NA", as.character(data$Sex)))
+  sex_fct <- factor(if_else(is.na(data$sex), "NA", as.character(data$sex)))
   if("sex" %in% types) {
     (my_ppc_bars_grouped(observed, predicted, group = sex_fct) + ggtitle(paste0("PPCheck sex for ", model_def$name))) %>% out_func
   }
@@ -138,7 +138,7 @@ plot_gene_phenotype_estimates <- function(fit, data_for_prediction) {
   data_with_prediction %>% ggplot(aes(x = gene, y = Estimate, ymin = lower, ymax = upper, color = gene)) +
     geom_linerange() + 
     geom_linerange(aes(ymin = Q25, ymax = Q75), size = 2) +
-    facet_wrap(~phenotype, ncol = 4)  +
+    facet_wrap(~phenotype, ncol = 3)  +
     theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5)) +
     base_theme
   
@@ -278,7 +278,7 @@ plot_gene_phenotype_differences_estimates <- function(
     original_geom +
     geom_linerange(aes(ymin = lower50, ymax = upper50), size = size_50) +
     geom_linerange() +
-    facet_wrap(~phenotype, scales = "free_y", ncol = 4)  + 
+    facet_wrap(~phenotype, scales = "free_y", ncol = 3)  + 
     scale_color_functional_group +
     scale_y_log10("Odds ratio", labels = simple_num_format) +
     scale_x_discrete(group_title, labels = bbs_labeller) +
@@ -362,7 +362,7 @@ plot_pairwise_differences <- function(model_def, fit, data_for_prediction,
                            colours = c("#ca0020","#f4a582","#f7f7f7","#f7f7f7","#92c5de","#0571b0"),
                            values = (c(-1,-0.75,-0.5,0.5,0.75,1) + 1) / 2) +
       theme_heatmap +
-      facet_wrap(~phenotype, ncol = 4) +
+      facet_wrap(~phenotype, ncol = 3) +
       ggtitle(paste0("Probability the difference is systematic", title_add))
   }
   
@@ -377,7 +377,7 @@ plot_pairwise_differences <- function(model_def, fit, data_for_prediction,
       theme_heatmap +
       scale_x_discrete(labels = bbs_labeller) +
       scale_y_discrete(labels = bbs_labeller) +
-      facet_wrap(~phenotype, ncol = 4) +
+      facet_wrap(~phenotype, ncol = 3) +
       ggtitle(paste0("Widest credible interval excluding 0", title_add))
   }
   
@@ -394,7 +394,7 @@ plot_pairwise_differences <- function(model_def, fit, data_for_prediction,
         theme_heatmap +
         scale_x_discrete(labels = bbs_labeller) +
         scale_y_discrete(labels = bbs_labeller) +
-        facet_wrap(~phenotype, ncol = 4) +
+        facet_wrap(~phenotype, ncol = 3) +
       ggtitle(paste0("Odds ratio, 95% conservative", title_add))
   }
   
@@ -409,7 +409,7 @@ plot_pairwise_differences <- function(model_def, fit, data_for_prediction,
       theme_heatmap +
       scale_x_discrete(labels = bbs_labeller) +
       scale_y_discrete(labels = bbs_labeller) +
-      facet_wrap(~phenotype, ncol = 4)+
+      facet_wrap(~phenotype, ncol = 3)+
       ggtitle(paste0("Odds ratio, 95% extreme", title_add))
   }
   
@@ -494,7 +494,7 @@ plot_lof_differences_estimates <- function(fit, data_for_prediction, genes_to_sh
     geom_hline(yintercept = 1, color = "darkred")+ 
     geom_linerange(aes(ymin = lower50, ymax = upper50), size = 2) +
     geom_linerange() +
-    facet_wrap(~phenotype, scales = "free_y", ncol = 4)  + 
+    facet_wrap(~phenotype, scales = "free_y", ncol = 3)  + 
     scale_color_functional_group +
     scale_y_log10("Odds ratio", labels = simple_num_format) +
     scale_x_discrete(group_title, labels = bbs_labeller) +

@@ -27,17 +27,22 @@ age_transform_from_age <- function(age) {
 
 read_main_data <- function() {
   
-  data <- read_excel(here("data","EV table 2 dataset.xlsx"), sheet = "List1") %>%
-    rename(case_no = "source case n.", additional_mutations = "additional mutations", mutation_types = "mut/mut") %>%
+  data <- read_excel(here("data","UPDATE2 SuppInfo Table S3 dataset.xlsx"), sheet = "List1") %>%
+    rename(case_no = "source case n.", 
+           additional_mutations = "additional mutations", 
+           mutation_types = "mut/mut",
+           family_id = FamilyID) %>%
     filter(!is.na(source) | !is.na(gene)) %>% #NA in source is only in the empty rows at the end of the table
-    select(source, case_no,gene, mutation_types, 
-           sex, age, RD:LIV) %>%
+    select(source, case_no, family_id, gene, mutation_types, 
+           sex, age, RD:DD) %>%
     mutate(
            CI = convert_uncertain_phenotype(CI),
            LIV = convert_uncertain_phenotype(LIV),
            REN = convert_uncertain_phenotype(REN),
            REP = convert_uncertain_phenotype(REP),
-           Sex = factor(toupper(sex)), 
+           DD = convert_uncertain_phenotype(DD),
+           family_id = factor(family_id, exclude = "NA"),
+           sex = factor(toupper(sex)), 
            source = factor(source),
            loss_of_function = factor(case_when(
                                      is.na(mutation_types) ~ "unknown",
@@ -112,7 +117,7 @@ read_main_data <- function() {
 
 data_long_from_data  <- function(data) {
   data_long_all <- data %>% 
-    gather("phenotype","phenotype_value",RD:LIV)
+    gather("phenotype","phenotype_value",RD:DD)
 
   functional_groups_to_show <- data$functional_group %>% unique()
   

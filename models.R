@@ -1,5 +1,5 @@
 
-phenotypes_to_use <- c("RD","OBE","PD","CI","REP","REN","HEART","LIV")
+phenotypes_to_use <- c("RD","OBE","PD","CI","REP","REN","HEART","LIV","DD")
 phenotypes_to_use_factor <- factor(phenotypes_to_use, levels = phenotypes_to_use)
 
 phenotypes_to_show <- phenotypes_to_use_factor
@@ -34,12 +34,14 @@ formula_gene_lof_per_gene <- add_lof_per_gene(formula_gene_lof)
 formula_gene_source_lof <- add_lof(formula_gene_source)
 formula_gene_source_lof_per_gene <- add_lof_per_gene(formula_gene_source_lof)
 
+formula_gene_source_lof_family <- brmsformula(update.formula(formula_gene_source_lof,  ~ . + (1||family_id)), family = "bernoulli")
 
-formula_gene_source_sex <- brmsformula(update.formula(formula_gene_source,  ~ . + (1||Sex : phenotype)), family = "bernoulli")
+
+formula_gene_source_sex <- brmsformula(update.formula(formula_gene_source,  ~ . + (1||sex : phenotype)), family = "bernoulli")
 
 formula_gene_source_age <- brmsformula(update.formula(formula_gene_source, ~ . + (0 + age_std_for_model||phenotype)), family = "bernoulli")                                       
 
-formula_gene_age_sex <- brmsformula(update(formula_gene_only, ~ . + (1||Sex : phenotype) + (0 + age_std_for_model||phenotype)) , 
+formula_gene_age_sex <- brmsformula(update(formula_gene_only, ~ . + (1||sex : phenotype) + (0 + age_std_for_model||phenotype)) , 
                                family = "bernoulli")
 
 formula_gene_age_sex_lof <- add_lof(formula_gene_age_sex)
@@ -86,6 +88,12 @@ models_base <- list(
     priors = c(default_priors, b_prior), 
     note = "",
     additional_components = c("source", "lof"), filter = "none"
+  ),
+  gene_source_lof_family =  list(
+    formula = formula_gene_source_lof_family,
+    priors = c(default_priors, b_prior),
+    note = "",
+    additional_components = c("source", "lof", "family"), filter = "family"
   ),
   
   gene_source_lof_wide = list(

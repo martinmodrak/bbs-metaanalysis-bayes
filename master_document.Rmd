@@ -1,5 +1,5 @@
 ---
-title: 'Appendix for "Exploring the function of the BBSome using clinical data: Meta-analysis of genotype-phenotype associations in Bardet-Biedl Syndrome"'
+title: 'Supplemental Statistical Analysis for "Exploring the function of the BBSome using clinical data: Meta-analysis of genotype-phenotype associations in Bardet-Biedl Syndrome"'
 output:
   pdf_document: 
      toc: true

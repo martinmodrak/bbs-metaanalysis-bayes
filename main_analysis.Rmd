@@ -80,14 +80,14 @@ phenotypes_to_use
 
 The data shows considerable between-study (source) variability (showing only the BBSome genes for clarity):
 
-```{r, fig.width=8, fig.height=4}
+```{r, fig.width=8, fig.height=6}
 data_long %>% 
   group_by(source, phenotype, gene) %>% 
   filter(functional_group == "BBSome", gene != "BBS18") %>%
   summarise(n_patients = length(phenotype_value), proportion = sum(phenotype_value) / n_patients) %>%
   ggplot(aes(x = gene, y = proportion, size = n_patients, color = gene)) +
   geom_jitter(alpha = 0.3, height = 0, width = 0.3) +
-  facet_wrap(~phenotype, ncol = 4) +
+  facet_wrap(~phenotype, ncol = 3) +
   scale_x_discrete(labels = bbs_labeller) + 
   scale_y_continuous("Proportion of phenotype") +
   scale_size_continuous(range = c(0.5,4)) +
@@ -297,7 +297,7 @@ Since those odds can vary wildly between studies, we will focus on various odds 
 
 ## Summary for functional groups
 
-```{r, fig.width=8, fig.height=4}
+```{r, fig.width=8, fig.height=6}
 differences_func_group_plot <- plot_gene_phenotype_differences_estimates(fit, data_for_prediction %>% mutate(group = functional_group), genes_to_show = genes_to_show, group_title = "Functional group", data_original = data_long %>% mutate(group = functional_group))
 differences_func_group_plot
 ```
@@ -307,7 +307,7 @@ The plot above shows posterior 95% (thin) and 50% (thick) credible intervals for
 ## Summary for BBSome genes
 
 
-```{r, fig.width=10, fig.height=4}
+```{r, fig.width=10, fig.height=7}
 differences_bbsome_plot <- plot_gene_phenotype_differences_estimates(fit, data_for_prediction_BBSome, genes_to_show = genes_to_show, data_original = data_long, wider = TRUE) + theme(axis.text.x = element_text(angle = 45, hjust = 0.7, vjust =0.7)) 
 differences_bbsome_plot 
 ```
@@ -317,7 +317,7 @@ The plot above shows posterior 95% (thin) and 50% (thick) credible intervals for
 
 ## Summary for Chaperonins
 
-```{r, fig.width=8, fig.height=4}
+```{r, fig.width=8, fig.height=6}
 
 data_for_prediction_chaperonins <- data_for_prediction %>% filter(functional_group_for_gene(gene) == "Chaperonins")
 
@@ -336,7 +336,7 @@ Pairwise comparisons also have the benefit of better interpretability as we do n
 
 ### Conservative estimates
 
-```{r, fig.width=8, fig.height=4}
+```{r, fig.width=8, fig.height=6}
 plot_pairwise_differences(main_model_def, fit, data_for_prediction_BBSome,  "heatmap_min")
 ```
 
@@ -349,7 +349,7 @@ This shows pairs where we are fairly certain there is a systematic difference an
 
 
 
-```{r, fig.width=8, fig.height=4}
+```{r, fig.width=8, fig.height=6}
 
 plot_pairwise_differences(main_model_def, fit, data_for_prediction_BBSome, plot_type = "heatmap_max")
 ```
@@ -361,7 +361,7 @@ This shows maximal differences consistent with our model and lets us constrain t
 
 ### Everything at once
 
-```{r, fig.width=10, fig.height=7}
+```{r, fig.width=10, fig.height=8}
 plot_pairwise_differences(main_model_def, fit, data_for_prediction_BBSome, plot_type = "linerange_all")
 
 ```
@@ -405,7 +405,7 @@ For most phenotypes we (expectedly) see that in cLOF mutations the phenotype is 
 
 ```{r saving_figures_for_publication}
 std_width = 8
-std_height = 4
+std_height = 6
 img_path = here("tmp_pics")
 if(!dir.exists(img_path)) {
   dir.create(img_path)
@@ -427,12 +427,72 @@ for(type in types) {
     ggsave(paste0("heatmap_max", type), plot = ., path = img_path,height = std_height, width = std_width)
 
   plot_pairwise_differences(main_model_def, fit, data_for_prediction_BBSome, plot_type = "linerange_all") %>%
-    ggsave(paste0("linerange_all", type), plot = ., path = img_path,height = 7, width = 10)
+    ggsave(paste0("linerange_all", type), plot = ., path = img_path,height = 8, width = 10)
 }
 ```
 
 
-## Extra inspection of the LIV phenotype
+## Discrepancies between frequentist and Bayesian analysis
+
+Here we try to understand why the frequentist and Bayesian analyses provided different results for some of the questions we asked.
+
+### CI phenotype and BBS7
+
+```{r}
+bbs_genes_to_check <- paste0("BBS0", c(1,2,4,5,7,8,9))
+
+data_long %>% filter(phenotype == "CI", gene %in% bbs_genes_to_check) %>% group_by(gene) %>%
+ summarise(proportion_CI = mean(phenotype_value), n = n()) %>% arrange(desc(proportion_CI))
+
+
+```
+```{r}
+pos = position_jitterdodge(dodge.width = 0.3, jitter.width = 0, jitter.height = 0.02)
+
+data_long %>% filter(phenotype == "CI", gene %in% bbs_genes_to_check) %>% 
+  mutate(BBS07 =gene == "BBS07") %>%
+  group_by(BBS07, source) %>%
+  summarise(proportion_CI = mean(phenotype_value), num_cases = length(phenotype_value)) %>% 
+  droplevels() %>%
+  ggplot(aes(x = BBS07, y = proportion_CI, group = source, color = source)) + 
+  geom_line(alpha = 0.5, position = pos) + geom_point(aes(size = num_cases), position = pos, alpha = 0.5) + guides(color = FALSE)
+
+
+```
+```{r}
+pos = position_jitterdodge(dodge.width = 0.3, jitter.width = 0, jitter.height = 0.02)
+
+data_long %>% filter(phenotype == "CI", gene %in% bbs_genes_to_check) %>% 
+  group_by(source, gene) %>%
+  summarise(proportion_CI = mean(phenotype_value), num_cases = length(phenotype_value)) %>% 
+  group_by(source) %>%
+  filter("BBS07" %in% gene) %>%
+  mutate(diff = proportion_CI - proportion_CI[gene == "BBS07"]) %>%
+  droplevels() %>%
+  ggplot(aes(x = gene, y = diff, group = source, color = source)) + 
+  #geom_line(alpha = 0.5, position = pos) + 
+  geom_point(aes(size = num_cases), position = pos, alpha = 0.5) +
+  guides(color = FALSE)
+
+
+```
+
+
+### HEART phenotype and BBS2
+
+```{r}
+data_long %>% filter(phenotype == "HEART", gene %in% bbs_genes_to_check) %>% group_by(gene) %>%
+ summarise(proportion_HEART = mean(phenotype_value), n = n()) %>% arrange(desc(proportion_HEART))
+```
+
+
+```{r}
+
+
+```
+
+
+### LIV phenotype and functional groups
 
 For the LIV phenotype the frequentist analysis disagrees with the Bayesian analysis presented here. In particular, the frequentist analysis shows BBS3 as least likely to result in LIV and chaperonins as most likely, while the analysis shown here reports exactly opposite trend. First, let's look at aggregate frequencies of LIV phenotype:
 
