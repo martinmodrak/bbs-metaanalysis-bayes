@@ -350,32 +350,44 @@ if(!identical(sort(levels(freq_conclusions$Conclusion)), sort(conclusion_names))
   stop("Conclusions mismatch")
 }
 
+min_prob = 1e-3
+max_prob = 1-1e-3
 
 evaluation_processed <- evaluation %>% 
   mutate(model_nice = factor(nice_model_name(model_name), levels = c(
    nice_model_name(names(all_models))
   ))) %>%
   gather("Conclusion","Probability", -model_name, -model_nice) %>%
-  mutate(Conclusion = factor(Conclusion, levels = levels(freq_conclusions$Conclusion)),
+  mutate(Probability = pmin(pmax(Probability, min_prob),max_prob), #Avoid probabilities of 0 and 1
+         Conclusion = factor(Conclusion, levels = levels(freq_conclusions$Conclusion)),
          Category = case_when(model_name %in% c("gene_source", "gene_source_lof", "gene_source_filtered_lof") ~ "Main",
                               model_name %in% c("gene_only", "gene_lof", "gene_lof_per_gene", "gene_only_filtered_lof") ~ "Bad fits", 
                               TRUE ~ "Secondary") %>% factor(levels = c("Main","Secondary","Bad fits")))
 
 plots_na_color <- "#606060"
 
-#TODO: logit trans for posterior prob.
 build_conclusion_plot <- function(evaluation_processed, categories = TRUE) {
   if(categories) {
     facet <- facet_grid(.~Category, scales = "free_x", space = "free_x") 
   } else {
     facet <- NULL
   }
+  breaks = c(0.01,0.1,0.5,0.9,0.99)
+  logit <- scales::logit_trans()$transform
+  transformed_values <- c(0, (logit(c(0.01,0.25,0.75,0.99)) - logit(min_prob)) / (logit(max_prob) - log(min_prob)), 1)
 
   evaluation_processed %>%
     ggplot(aes(x = model_nice, y = Conclusion, fill = Probability, colour = "")) + geom_tile() + 
       theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5)) + 
-      scale_fill_gradientn("Posterior prob.", colours = c("#1b7837","#f0f0f0", "#f0f0f0", "#762a83"),
-                           values = c(0, 0.25,0.75,1),  limits = c(0,1), na.value = plots_na_color) +
+      scale_fill_gradientn("Posterior prob.", 
+                           #colours = c("#1b7837","#f0f0f0", "#f0f0f0", "#762a83"),
+                           # values = c(0, 0.25,0.75,1),  
+                           # limits = c(0,1), na.value = plots_na_color) +
+                           colours = c("#1b7837","#1b7837","#f0f0f0", "#f0f0f0", "#762a83", "#762a83"),
+                           values = transformed_values,
+                           limits = c(min_prob,max_prob),
+                           breaks = breaks,
+                           na.value = plots_na_color, trans = "logit") +
       scale_x_discrete("Model components/modifications besides gene") +
       scale_colour_manual(values=NA) +              
       #Using color scale to create legend for NA
@@ -393,7 +405,9 @@ conclusions_plot
 
 ```
 
-A heatmap of posterior probability of statements characterizing individual conclusions. All Bayesian models include gene as covariate but may also include additional covarietes: source, age, sex and certain loss of function (cLOF) - either as a global covariate or by gene. Since age and sex are not available for all data, we can either fit the model only to patients where those are reported (filtered) or impute missing data (imputed). Instead of using cLOF as a covariate, we can fit the model using only patients with cLOF mutations (filtered cLOF). For most models we include a correlation structure across phenotypes (e.g., that two phenotypes occur frequently together across all genes), but this structure may be absent (no corr.) or replaced with a correlation structure across genes (gene corr. - e.g., that two genes have similar pattern of effects across all phenotypes). We also tried modifying the width of prior distributions (wide, narrow, very narrow). See Part 2 of this supplement for a detailed description of all models and the imputation procedure. Dark grey indicates that the question could not be evaluated for the given model (currently only asking for cLOF differences in models that exclude cLOF). The "Bad fits" category is reserved for models we now fit the data badly, as discussed in Part 2.
+A heatmap of posterior probability of statements characterizing individual conclusions. Note that the probability is on logit scale. All Bayesian models include gene as covariate but may also include additional covarietes: source, age, sex and certain loss of function (cLOF) - either as a global covariate or by gene. Since age and sex are not available for all data, we can either fit the model only to patients where those are reported (filtered) or impute missing data (imputed). Instead of using cLOF as a covariate, we can fit the model using only patients with cLOF mutations (filtered cLOF). For most models we include a correlation structure across phenotypes (e.g., that two phenotypes occur frequently together across all genes), but this structure may be absent (no corr.) or replaced with a correlation structure across genes (gene corr. - e.g., that two genes have similar pattern of effects across all phenotypes). We also tried modifying the width of prior distributions (wide, narrow, very narrow). See Part 2 of this supplement for a detailed description of all models and the imputation procedure. Dark grey indicates that the question could not be evaluated for the given model (currently only asking for cLOF differences in models that exclude cLOF). The "Bad fits" category is reserved for models we now fit the data badly, as discussed in Part 2.
+
+Note: posterior probabilities are clamped to be at least $0.001$ and at most $0.999$ as the sampling scheme used does not let us to be very confident in the tails of the distribution.
 
 Some patterns to notice:
 
