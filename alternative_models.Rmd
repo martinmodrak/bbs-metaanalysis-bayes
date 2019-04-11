@@ -63,10 +63,11 @@ models_base %>% walk(function(def) {
 ```
 
 
-```{r fit_base_models}
+```{r fit_base_models, results = "hide"}
 fits_base <- models_base %>%
   map(function(def) {
-     fit_base_model(def, data_long)
+    cat(paste0("Fitting ", def$name, "\n"))
+    fit_base_model(def, data_long)
   }
 ) 
 ```
@@ -244,6 +245,13 @@ Having cLOF coefficient differ per gene does not bring noticeable improvements:
 pp_check_helper("gene_source_lof_per_gene", c("phenotype_lof","gene_lof"))
 ```
 
+### Family information
+
+TODO
+
+### Prior width
+
+TODO
 
 ### Model selection verdict
 

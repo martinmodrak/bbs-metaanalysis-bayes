@@ -192,7 +192,7 @@ For mathematical convenience, the model does not work with prevalence directly, 
 
 Most of the results of the model are reported as comparisons of odds in different populations. For this we use the ratio of the corresponding odds. E.g., when the odds ratio is 2, we expect the first population to have twice as much patients exhibiting the phenotype for each healthy patient than the second population.
 
-Technically the model works with the logarithm of odds. The logit function trasnforms a probability (prevalence) to log odds, hence the logit "link" used in the model. What is the linear part?
+Technically the model works with the logarithm of odds. The logit function transforms a probability (prevalence) to log odds, hence the logit "link" used in the model. What is the linear part?
 
 Our model assumes that the true odds of a phenotype is a function of four numbers (*coefficients*): the overall odds of the phenotype in the population, a modifier for the gene the patient has damaged and a modifier for the study the patient is enrolled in. One additional modifier is added when the mutation is a certain loss-of-function (cLOF). These four numbers are multiplied to arrive at the final odds for the patient. Assuming only cLOF mutations for simplicity, this means that while the odds of a phenotype are allowed to vary between genes and the overall rate of a phenotype may vary between studies, the odds ratio of different genes is the same across all studies. Let's look at an example:
 
@@ -434,62 +434,113 @@ for(type in types) {
 
 ## Discrepancies between frequentist and Bayesian analysis
 
-Here we try to understand why the frequentist and Bayesian analyses provided different results for some of the questions we asked.
+Here we try to understand why the frequentist and Bayesian analyses provided different results for some of the questions we asked. In all cases the answer is that there is substantial between-study variability, which, when taken into account, prevents us from making firm conclusions about some of the comparisons that are significant in the frequentist analysis.
 
 ### CI phenotype and BBS7
+
+Looking at raw proportions in the whole dataset, BBS7 has the highest prevalence of the CI phenotype (and the difference was significant for the frequentist analysis):
 
 ```{r}
 bbs_genes_to_check <- paste0("BBS0", c(1,2,4,5,7,8,9))
 
 data_long %>% filter(phenotype == "CI", gene %in% bbs_genes_to_check) %>% group_by(gene) %>%
- summarise(proportion_CI = mean(phenotype_value), n = n()) %>% arrange(desc(proportion_CI))
+ summarise(prevalence_CI = mean(phenotype_value), n = n()) %>% arrange(desc(prevalence_CI)) %>%
+  kable()
 
 
 ```
+
+The picture however gets complicated when we look at individual studies:
+
 ```{r}
-pos = position_jitterdodge(dodge.width = 0.3, jitter.width = 0, jitter.height = 0.02)
+plot_diff_average_to_single_gene <- function(data_long, target_phenotype, target_gene, genes_to_check, others_label = "others") {
+  pos = position_jitterdodge(dodge.width = 0.3, jitter.width = 0, jitter.height = 0.02)
+  
+  data_long %>% filter(phenotype == target_phenotype, gene %in% genes_to_check) %>% 
+    mutate(type = if_else(gene == target_gene, target_gene, others_label)) %>%
+    group_by(type, source) %>%
+    summarise(proportion = mean(phenotype_value), num_cases = length(phenotype_value)) %>% 
+    droplevels() %>%
+    ggplot(aes(x = type, y = proportion, group = source, color = source)) + 
+    geom_line(alpha = 0.5, position = pos) + geom_point(aes(size = num_cases), position = pos, alpha = 0.5) + guides(color = FALSE) + scale_y_continuous(paste("Prevalence", target_phenotype))
+}
 
-data_long %>% filter(phenotype == "CI", gene %in% bbs_genes_to_check) %>% 
-  mutate(BBS07 =gene == "BBS07") %>%
-  group_by(BBS07, source) %>%
-  summarise(proportion_CI = mean(phenotype_value), num_cases = length(phenotype_value)) %>% 
-  droplevels() %>%
-  ggplot(aes(x = BBS07, y = proportion_CI, group = source, color = source)) + 
-  geom_line(alpha = 0.5, position = pos) + geom_point(aes(size = num_cases), position = pos, alpha = 0.5) + guides(color = FALSE)
-
+plot_diff_average_to_single_gene(data_long, "CI", "BBS07", bbs_genes_to_check)
 
 ```
+Here, each dot is a study with size indicating the number of cases. We show the prevalence for BBS7 and prevalence across the other mutations. Lines connect estimates from the same study. This shows us that while BBS7 indeed has high CI prevalence (the prevalance is 100% in most studies), there are some studies where the CI prevalance is lower than prevalence in other mutations:
+
 ```{r}
-pos = position_jitterdodge(dodge.width = 0.3, jitter.width = 0, jitter.height = 0.02)
-
-data_long %>% filter(phenotype == "CI", gene %in% bbs_genes_to_check) %>% 
-  group_by(source, gene) %>%
-  summarise(proportion_CI = mean(phenotype_value), num_cases = length(phenotype_value)) %>% 
-  group_by(source) %>%
-  filter("BBS07" %in% gene) %>%
-  mutate(diff = proportion_CI - proportion_CI[gene == "BBS07"]) %>%
-  droplevels() %>%
-  ggplot(aes(x = gene, y = diff, group = source, color = source)) + 
-  #geom_line(alpha = 0.5, position = pos) + 
-  geom_point(aes(size = num_cases), position = pos, alpha = 0.5) +
-  guides(color = FALSE)
-
+data_long %>% filter(phenotype == "CI") %>% group_by(source) %>%
+ summarise(prevalence_CI_BBS07 = mean(phenotype_value[gene == "BBS07"]), prevalence_CI_others = mean(phenotype_value[gene != "BBS07"]), n_BBS07 = sum(gene=="BBS07"), n_others = sum(gene != "BBS07")) %>% filter(prevalence_CI_BBS07 < prevalence_CI_others) %>% arrange(desc(prevalence_CI_BBS07)) %>%
+  kable()
 
 ```
+
+This includes the Ullah et al. study which has the largest number of BBS07 cases with reported CI phenotype in the whole dataset. So while there is some evidence for BBS07 having unusually high prevalence of CI, we cannot rule out that this is caused by between-study variability.
+
+The above plot looked at total prevalence across all other mutations, we can also look at comparisons of prevalence between individual mutations:
+
+```{r}
+plot_all_diffs_to_single_gene <- function(data_long, target_phenotype, target_gene, genes_to_check) {
+  pos = position_dodge(width = 0.3)
+  
+  data_long %>% filter(phenotype == target_phenotype, gene %in% bbs_genes_to_check) %>% 
+    group_by(source, gene) %>%
+    summarise(proportion = mean(phenotype_value), num_cases = length(phenotype_value)) %>% 
+    group_by(source) %>%
+    filter(target_gene %in% gene) %>%
+    mutate(diff = proportion[gene == target_gene] - proportion) %>%
+    ungroup() %>%
+    filter(gene != target_gene) %>%
+    droplevels() %>%
+    ggplot(aes(x = gene, y = diff, group = source, color = source)) + 
+    #geom_line(alpha = 0.5, position = pos) + 
+    geom_point(aes(size = num_cases), position = pos, alpha = 0.5) +
+    guides(color = FALSE) +
+    scale_y_continuous(paste("Difference in prevalence of", target_phenotype, "to",target_gene))
+}
+
+plot_all_diffs_to_single_gene(data_long, "CI", "BBS07", bbs_genes_to_check)
+
+```
+Once again, each dot is a study, the dot size corresponds to the number of patients with the mutation on x-axis and the y-axis shows the difference in prevalence against BBS7 (positive - BBS7 has higher prevalence). Once again most studies show no or positive difference, but some studies show negative difference and for BBS08 there are actually more studies showing effect in the opposite direction. This means that the model cannot conclude that BBS7 has higher 
 
 
 ### HEART phenotype and BBS2
 
+The case of BBS2 is similar to BBS7 - looking at proportions across the whole dataset, BBS2 has the highest prevalence of HEART (significant in the frequentist analysis), but the sample sizes are even smaller than in the above case:
+
 ```{r}
 data_long %>% filter(phenotype == "HEART", gene %in% bbs_genes_to_check) %>% group_by(gene) %>%
- summarise(proportion_HEART = mean(phenotype_value), n = n()) %>% arrange(desc(proportion_HEART))
+ summarise(prevalence_HEART = mean(phenotype_value), n = n()) %>% arrange(desc(prevalence_HEART)) %>%
+  kable()
 ```
 
+Lets look at comparison of BBS02 to prevalence across all other phenotypes:
 
 ```{r}
+plot_diff_average_to_single_gene(data_long, "HEART", "BBS02", bbs_genes_to_check)
+```
 
+We see there is one study showing higher prevalence, one study showing lower prevalence and two showing equal prevalence. All the other studies either had only BBS02 or had no BBS02 and so cannot directly contribute to a conclusion, despite showing small prevalence of HEART. Once again, we cannot rule out the difference between BBS2 and others in HEART phenotype is simply due to between-study variability.
+
+### LIV BBS2 to BBS1 comparison
+
+In the data BBS02 has higher LIV prevalence than BBS01 (again statistically significant, despite the small sample sizes):
+```{r}
+data_long %>% filter(phenotype == "LIV", gene %in% c("BBS01","BBS02")) %>% group_by(gene) %>%
+ summarise(prevalence = mean(phenotype_value), num_cases = n()) %>%
+  kable()
 
 ```
+
+Let's plot the between-study variability:
+
+```{r}
+plot_diff_average_to_single_gene(data_long, "LIV", target_gene = "BBS01", genes_to_check = c("BBS02", "BBS01"), others_label = "BBS02")
+```
+There is one study that show increase for BBS02 and one that shows decrease for BBS02. And the one showing decrease is actually the studies with larger sample size. The difference seems to be driven by studies that have BBS01 patients no or almost no BBS02 patients and can thus be attributed to between-study variability.
 
 
 ### LIV phenotype and functional groups
