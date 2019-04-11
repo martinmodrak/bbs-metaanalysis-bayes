@@ -80,7 +80,7 @@ phenotypes_to_use
 
 The data shows considerable between-study (source) variability (showing only the BBSome genes for clarity):
 
-```{r, fig.width=8, fig.height=6}
+```{r, fig.width=6.6666, fig.height=4}
 data_long %>% 
   group_by(source, phenotype, gene) %>% 
   filter(functional_group == "BBSome", gene != "BBS18") %>%
@@ -104,7 +104,7 @@ Our analysis assumes the phenotype data to be missing at random, i.e. that the d
 
 However, in our analysis we were unable to find a good way to account for this phenomenon. But since we focus on comparison of individual phenotype prevalence across different mutations within a single study and do not compare phenotypes against each other, this should only be a significant issue if the rate of missingness in phenotype values is correlated with the prevalence of individual mutations present in a study (e.g., if studies with high obesity missingness would also tend to have overabundance of mutations in BBS3). Let's check whether this is the case:
 
-```{r}
+```{r, fig.width=8,fig.height=4}
 phenotype_stats <- data_long %>% 
   group_by(ID, source) %>%
   summarise(n_pheno = length(phenotype)) %>%
@@ -135,7 +135,7 @@ As all models, the model we use simplifies and abstracts the medical reality in 
 Our model tries to estimate theoretical  *true prevalence* of the phenotype in a population - i.e. the probability that a randomly selected patient from the population will exhibit this phenotype. But all we observe is that each individual either exhibits the phenotype or not. Depending on the number of individuals enrolled in a study, the *observed prevalence* will jump more or less around this true prevalence - let's have a look at an example: 
 
 
-```{r}
+```{r, fig.width=8, fig.height=4}
 
 plot_example <- function(true_prevalences, n_cases, between_study_variability = 0, n_samples = 20) {
   vertical_labels <- theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5))
@@ -196,7 +196,7 @@ Technically the model works with the logarithm of odds. The logit function trans
 
 Our model assumes that the true odds of a phenotype is a function of four numbers (*coefficients*): the overall odds of the phenotype in the population, a modifier for the gene the patient has damaged and a modifier for the study the patient is enrolled in. One additional modifier is added when the mutation is a certain loss-of-function (cLOF). These four numbers are multiplied to arrive at the final odds for the patient. Assuming only cLOF mutations for simplicity, this means that while the odds of a phenotype are allowed to vary between genes and the overall rate of a phenotype may vary between studies, the odds ratio of different genes is the same across all studies. Let's look at an example:
 
-```{r}
+```{r, fig.width=8, fig.height=3}
 set.seed(1211)
 tibble(gene = paste("Gene",1:3), odds = c(1, 5, 3)) %>% crossing(tibble(source = paste("Study ", 1:2), multiplier = 1:2)) %>% crossing(tibble(type = c("Allowed", "Disallowed 1", "Disallowed 2"), noise_sd = c(0,1,1))) %>%
   mutate(odds = if_else(multiplier == 1, odds, rlnorm(n(), log(odds * multiplier), sd = noise_sd))) %>%
@@ -276,11 +276,13 @@ The $N(0, 2)$ priors on the various parameters are mildly skeptical in that they
 
 ## Main results
 
-First, a summary of the model fit as posterior intervals for main model parameters: 
+First, a summary of the model fit as posterior intervals for main model parameters (omitting correlation parameters for brevity): 
 
 ```{r}
 fit <- fit_base_model(main_model_def, data_long)
-fit
+s <- summary(fit)
+s$random$gene <- s$random$gene[!grepl("^cor", rownames(s$random$gene)),]
+s
 ```
 
 ```{r}
@@ -289,7 +291,7 @@ data_for_prediction <- data_for_prediction_base_model(main_model_def, genes_to_s
 data_for_prediction_BBSome <- data_for_prediction %>% filter(functional_group_for_gene(gene) == "BBSome", gene != "BBS18")
 ```
 
-The fitted model parameters themselves are however hard to interpret, as they operate on log odds scale. It is also hard to say how to handle the between-study variability of coefficients. And this variability  is substantial - note that the `sd` parameters under `~source` (corresponding to $\sigma_3$) admit ranges from $\sim 1.1$ to $\sim 5.1$, so the odds of a phenotype, given a mutation can plausibly differ between studies by $1.96 \times \pm 1.1 = \pm 2.16$ to $1.96 \times \pm 5.09 = \pm 9.99$ _on the log scale_ (95% of mass of a normal distribution is within $1.96 \times \sigma$ from the mean). 
+The fitted model parameters themselves are however hard to interpret, as they operate on log odds scale and there might be notable covariance in the posterior. It is also hard to say how to handle the between-study variability of coefficients. And this variability  is substantial - note that the `sd` parameters under `~source` (corresponding to $\sigma_3$) admit ranges from $\sim 1.1$ to $\sim 5.1$, so the odds of a phenotype, given a mutation can plausibly differ between studies by $1.96 \times \pm 1.1 = \pm 2.16$ to $1.96 \times \pm 5.09 = \pm 9.99$ _on the log scale_ (95% of mass of a normal distribution is within $1.96 \times \sigma$ from the mean). 
 
 Instead, we will focus on model predictions. In particular, the results we report can be interpreted as if a new study is drawn at random from the same population of studies as we used (i.e. matching all the inclusion criteria) and we directly observe true odds of all phenotypes for all mutations in this study. That is, the predictions do include between-study variability, our uncertainty about the population of studies, our uncertainty about overall prevalence of the individual phenotypes, our uncertainty about the strength of links between mutations and phenotypes and our uncertainty about correlations between the presence of individual phenotypes. The predictions do NOT include the sampling uncertainty of the hypothetical new study. For example when the hypothetical study has the true odds of a phenotype, given a mutation in BBS12, equal to $1:2$ ($0.5$), a study on 20 patients can easily observe odds of $3:17$ ($0.18$) or $11:9$ ($1.22$) simply due to chance, but we will treat the hypothetical study here as having odds of $0.5$ and ignore this additional noise in our results.
 
@@ -374,7 +376,7 @@ This plot integrates the information shown in the plots above and some more.
 
 What is the effect of certain loss of function? Since LOF does not vary per gene, let us look at the corresponding odds ratio per phenotype.
 
-```{r}
+```{r, fig.width = 8, fig.height = 3}
 #Here the LOF coefficient directly corresponds to the odds ratios, so not using predictions, but it is equivalant
 summary_50 <- summary(fit, prob = 0.50)$fixed %>%
   as.data.frame() %>% 
@@ -452,7 +454,7 @@ data_long %>% filter(phenotype == "CI", gene %in% bbs_genes_to_check) %>% group_
 
 The picture however gets complicated when we look at individual studies:
 
-```{r}
+```{r, fig.width = 6, fig.height = 2.5}
 plot_diff_average_to_single_gene <- function(data_long, target_phenotype, target_gene, genes_to_check, others_label = "others") {
   pos = position_jitterdodge(dodge.width = 0.3, jitter.width = 0, jitter.height = 0.02)
   
@@ -462,12 +464,14 @@ plot_diff_average_to_single_gene <- function(data_long, target_phenotype, target
     summarise(proportion = mean(phenotype_value), num_cases = length(phenotype_value)) %>% 
     droplevels() %>%
     ggplot(aes(x = type, y = proportion, group = source, color = source)) + 
-    geom_line(alpha = 0.5, position = pos) + geom_point(aes(size = num_cases), position = pos, alpha = 0.5) + guides(color = FALSE) + scale_y_continuous(paste("Prevalence", target_phenotype))
+    geom_line(alpha = 0.5, position = pos) + geom_point(aes(size = num_cases), position = pos, alpha = 0.5) + guides(color = FALSE) + scale_y_continuous(paste("Prevalence", target_phenotype)) +
+    base_theme
 }
 
 plot_diff_average_to_single_gene(data_long, "CI", "BBS07", bbs_genes_to_check)
 
 ```
+
 Here, each dot is a study with size indicating the number of cases. We show the prevalence for BBS7 and prevalence across the other mutations. Lines connect estimates from the same study. This shows us that while BBS7 indeed has high CI prevalence (the prevalance is 100% in most studies), there are some studies where the CI prevalance is lower than prevalence in other mutations:
 
 ```{r}
@@ -481,7 +485,7 @@ This includes the Ullah et al. study which has the largest number of BBS07 cases
 
 The above plot looked at total prevalence across all other mutations, we can also look at comparisons of prevalence between individual mutations:
 
-```{r}
+```{r, fig.width = 8, fig.height = 3}
 plot_all_diffs_to_single_gene <- function(data_long, target_phenotype, target_gene, genes_to_check) {
   pos = position_dodge(width = 0.3)
   
@@ -498,12 +502,14 @@ plot_all_diffs_to_single_gene <- function(data_long, target_phenotype, target_ge
     #geom_line(alpha = 0.5, position = pos) + 
     geom_point(aes(size = num_cases), position = pos, alpha = 0.5) +
     guides(color = FALSE) +
-    scale_y_continuous(paste("Difference in prevalence of", target_phenotype, "to",target_gene))
+    scale_y_continuous(paste("Difference in prevalence of", target_phenotype, "to",target_gene)) +
+    base_theme
 }
 
 plot_all_diffs_to_single_gene(data_long, "CI", "BBS07", bbs_genes_to_check)
 
 ```
+
 Once again, each dot is a study, the dot size corresponds to the number of patients with the mutation on x-axis and the y-axis shows the difference in prevalence against BBS7 (positive - BBS7 has higher prevalence). Once again most studies show no or positive difference, but some studies show negative difference and for BBS08 there are actually more studies showing effect in the opposite direction. This means that the model cannot conclude that BBS7 has higher 
 
 
@@ -519,7 +525,7 @@ data_long %>% filter(phenotype == "HEART", gene %in% bbs_genes_to_check) %>% gro
 
 Lets look at comparison of BBS02 to prevalence across all other phenotypes:
 
-```{r}
+```{r, fig.width = 6, fig.height = 2.5}
 plot_diff_average_to_single_gene(data_long, "HEART", "BBS02", bbs_genes_to_check)
 ```
 
@@ -528,16 +534,17 @@ We see there is one study showing higher prevalence, one study showing lower pre
 ### LIV BBS2 to BBS1 comparison
 
 In the data BBS02 has higher LIV prevalence than BBS01 (again statistically significant, despite the small sample sizes):
+
 ```{r}
 data_long %>% filter(phenotype == "LIV", gene %in% c("BBS01","BBS02")) %>% group_by(gene) %>%
- summarise(prevalence = mean(phenotype_value), num_cases = n()) %>%
+ summarise(prevalence_LIV = mean(phenotype_value), num_cases = n()) %>%
   kable()
 
 ```
 
 Let's plot the between-study variability:
 
-```{r}
+```{r, fig.width = 6, fig.height = 2.5}
 plot_diff_average_to_single_gene(data_long, "LIV", target_gene = "BBS01", genes_to_check = c("BBS02", "BBS01"), others_label = "BBS02")
 ```
 There is one study that show increase for BBS02 and one that shows decrease for BBS02. And the one showing decrease is actually the studies with larger sample size. The difference seems to be driven by studies that have BBS01 patients no or almost no BBS02 patients and can thus be attributed to between-study variability.
@@ -549,13 +556,13 @@ For the LIV phenotype the frequentist analysis disagrees with the Bayesian analy
 
 ```{r}
 data_long %>% filter(phenotype == "LIV") %>% group_by(functional_group) %>%
- summarise(proportion_LIV = mean(phenotype_value))
+ summarise(proportion_LIV = mean(phenotype_value)) %>% kable()
 ```
 
 Indeed this supports the frequentist conclusions (as this is actually what those are based on). However, this aggregate look ignores between-study variability. So let's look what individual studies show:
 
 
-```{r}
+```{r, fig.width= 8, fig.height=2.5}
 pos = position_jitterdodge(dodge.width = 0.3, jitter.width = 0, jitter.height = 0.02)
 
 plot_liv_source <-  data_long %>% filter(phenotype == "LIV", functional_group != "Others") %>% 
@@ -563,7 +570,8 @@ plot_liv_source <-  data_long %>% filter(phenotype == "LIV", functional_group !=
   summarise(proportion_LIV = mean(phenotype_value), num_cases = length(phenotype_value)) %>% 
   droplevels() %>%
   ggplot(aes(x = functional_group, y = proportion_LIV, group = source, color = source)) + 
-  geom_line(alpha = 0.5, position = pos) + geom_point(aes(size = num_cases), position = pos, alpha = 0.5) + guides(color = FALSE)
+  geom_line(alpha = 0.5, position = pos) + geom_point(aes(size = num_cases), position = pos, alpha = 0.5) + guides(color = FALSE) + scale_y_continuous("Prevalence LIV") +
+  base_theme
 
 plot_liv_source
 
@@ -577,18 +585,4 @@ In the plot above, each dot is the proportion of patients with LIV given a mutat
 This plot tells a different story: most individual studies, especially those with larger number of cases show increase in LIV phenotype for BBSome against Chaperonins. There is only one larger study including both BBS3 and BBSome and it has more LIV positive cases for BBS3. The overall opposite trend is driven by a) the only larger studies reporting BBS3 having unusually low proportion of LIV in general and b) studies reporting mutations only for BBS3 or only for BBSome having unusually low proportion of LIV. 
 
 It however seems that the evidence in this direction is not very compelling.
-
-For a complete picture, let's look at pairwise differences between the 3 most common BBSome mutations (BBS1, BBS2 and BBS4), BBS3 and the chaperonins (BBS6, BBS10, BBS12). 
-
-```{r, fig.width=10, fig.height=7}
-data_for_prediction_LIV <- tibble(gene = c("BBS1", "BBS2", "BBS4", "BBS3", "BBS6", "BBS10", "BBS12"), source = "new_source", loss_of_function_certain = 1) %>%
-    crossing(tibble(phenotype = phenotypes_to_show))
-
-plot_pairwise_differences(main_model_def, fit, data_for_prediction_LIV, plot_type = "linerange_all")
-
-```
-
-We see that for the LIV phenotype there is large uncertainty and all 95% intervals include one. We also see that the large differences we have seen in the summary plots for CI and REN do translate into a quite confident estimates of notable pairwise differences between most BBSome genes, BBS3, and chaperonins.
-
-
 

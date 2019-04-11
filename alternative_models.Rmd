@@ -7,7 +7,7 @@ output:
 ---
 
 ```{r setup_alternative, echo=FALSE, message = FALSE, warning=FALSE}
-knitr::opts_chunk$set(echo=FALSE, cache = TRUE)
+knitr::opts_chunk$set(echo=FALSE, cache = TRUE, cache.lazy = FALSE)
 library(rstan)
 library(brms)
 options(mc.cores = parallel::detectCores())
@@ -128,6 +128,7 @@ Modeling between-study variability is simply a good practice for any meta-analys
 
 ```{r}
 pp_check_helper <- function(model_names, pp_check_types) {
+  
   if(compute_pp_checks) {
     for(name in model_names) {
       run_pp_checks(all_models[[name]], all_fits[[name]], data_long, types = pp_check_types, out_func = function(x) {
@@ -148,26 +149,26 @@ pp_check_helper <- function(model_names, pp_check_types) {
 ```
 
 
-```{r, fig.height=3}
-pp_check_helper("gene_only", "source_10")
+```{r, fig.height=4}
+pp_check_helper("gene_only", "source_10") 
 ```
 
 Here, the bars represent actual prevalence in the data, the dots the posterior mean for those subgroups and the lines posterior 95% credible interval. Note that we clump together all phenotypes for simplicity. We see that the model is overly certain in its predictions and the posterior credible intervals frequently miss the actual counts in a study. 11 / 25 sources have predictions not very consistent with data.
 
 This does not resolve when including cLOF and/or age and sex (here using the model filtered for age, as we don't really care about wide posterior intervals)
 
-```{r, fig.height=3}
-pp_check_helper("gene_filtered_age_sex", "source_10")
+```{r, fig.width=8, fig.height=2}
+pp_check_helper("gene_filtered_age_sex",  "source_10")
 ```
 6/14 source are noticeably off in gene_filtered_age_sex
 
-```{r, fig.height=3}
+```{r, fig.height=4}
 pp_check_helper("gene_lof_per_gene", "source_10")
 ```
 
 10/25 sources are noticeably off gene_lof_per_gene
 
-```{r, fig.height=3}
+```{r,fig.width = 8, fig.height=2}
 pp_check_helper("gene_lof_per_gene_filtered_age_sex", "source_10")
 ```
 
@@ -175,17 +176,17 @@ pp_check_helper("gene_lof_per_gene_filtered_age_sex", "source_10")
 
 Including source explicitly alleviates a large fraction (but not all) of the problems:
 
-```{r, fig.height=3}
+```{r, fig.height=4}
 pp_check_helper("gene_source", "source_10")
 ```
 
 We see 6/25 sources problematic in gene_source. However including cLOF and source makes the fit good across all sources:
 
-```{r, fig.height=3}
+```{r, fig.height=4}
 pp_check_helper("gene_source_lof", "source_10")
 ```
 
-```{r, fig.height=3}
+```{r, fig.height=5}
 pp_check_helper("gene_source_lof", "source_10_lof")
 ```
 
@@ -196,14 +197,14 @@ It therefore seems that both source and cLOF are important factors.
 
 Age and sex differences don't necessarily need to be included, as they are sufficiently well explained by the `gene_source_lof` model. First let's look at overall prevalance by sex and age group:
 
-```{r, fig.height=3}
+```{r, fig.height=2.5}
 pp_check_helper("gene_source_lof", c("sex","age"))
 ```
 Note that missing data are treated as a separate age category.
 
 No big problems in the bulk age/sex groups. We can also look at age and sex by individual phenotypes (we collapse some of the age groups to make the age + phenotype plot readable:
 
-```{r, fig.height=3}
+```{r, fig.height=4}
 pp_check_helper("gene_source_lof", c("sex_phenotype","age_phenotype"))
 ```
 
@@ -247,11 +248,26 @@ pp_check_helper("gene_source_lof_per_gene", c("phenotype_lof","gene_lof"))
 
 ### Family information
 
-TODO
+We see the the `gene_source_lof` model already does not do badly in predicting prevalence within families, although including family in the model is definitely an improvement for some families.
+
+```{r, fig.height = 2.5}
+pp_check_helper(c("gene_source_lof", "gene_source_lof_family"), "family_4")
+```
+
+```{r, fig.height = 3}
+pp_check_helper(c("gene_source_lof", "gene_source_lof_family"), c("family_3"))
+```
+
+TODO: what to conclude from this?
 
 ### Prior width
 
-TODO
+One example that the "very narrow" prior prevents the model from fitting well is that the fit cannot capture the BBS03 and Chaperonins functional groups, while "narrow" (and wider) priors don't have a problem with that:
+```{r, fig.width = 8, fig.height = 1.5}
+pp_check_helper(c("gene_source_very_narrow","gene_source_narrow", "gene_source"), c("functional_group"))
+```
+
+Otherwise we didn't find a good reason to prefer either of the "narrow", normal and "wide" priors and this choice seems to be of little consequence.
 
 ### Model selection verdict
 

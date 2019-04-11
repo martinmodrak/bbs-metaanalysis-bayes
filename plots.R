@@ -21,15 +21,32 @@ bbs_labeller_facet <- labeller(gene = bbs_labeller)
 
 
 my_ppc <- function(fun, ...) {
-  fun(..., prob = posterior_interval, fatten = 1.5, freq = FALSE)
+  #I unfortunatel need different settigns from within RStudio and for PDF render
+  if(is.null(knitr::current_input())) {
+    fatten = 1.5
+    size = 1
+  } else {
+    fatten = 0.8
+    size = 0.5
+  }
+  fun(..., prob = posterior_interval, fatten = fatten, size = size, freq = FALSE)
 }
 
 my_ppc_bars <- function(...) {
   my_ppc(ppc_bars, ...) + theme(axis.text = element_blank())
 }
 
-my_ppc_bars_grouped <- function(...) {
-  my_ppc(ppc_bars_grouped, ...) + theme(axis.text = element_blank())
+my_ppc_bars_grouped <- function(group, ...) {
+  n_groups <- length(unique(group))
+  if(ceiling(n_groups / 7) < (n_groups / 6)) {
+    ncol = 7
+  } else {
+    ncol = 6
+  }
+  res <- my_ppc(ppc_bars_grouped, facet_args = list(ncol = ncol), group = group, ...) + 
+    theme(axis.text = element_blank())
+  
+  suppressMessages(res  +  scale_x_continuous(breaks = c(0,1)))
 }
 
 run_pp_checks <- function(model_def, fit, data_long, 
@@ -65,6 +82,7 @@ run_pp_checks <- function(model_def, fit, data_long,
        small_labels
      ) %>% out_func
   }
+  
   filter_10 <- data %>% group_by(source) %>% mutate(include = length(unique(ID)) >= 10) %>% pull(include)
   if("source_10" %in% types) {
     (my_ppc_bars_grouped(data$phenotype_value[filter_10], predicted[, filter_10], group = data$source[filter_10]) + 
@@ -78,6 +96,24 @@ run_pp_checks <- function(model_def, fit, data_long,
        small_labels
     ) %>% out_func
   }
+  
+  filter_family_4 <- data %>% group_by(family_id) %>% mutate(include = !any(is.na(family_id)) & length(unique(ID)) >= 4) %>% pull(include)
+  if("family_4" %in% types) {
+    (my_ppc_bars_grouped(data$phenotype_value[filter_family_4], predicted[, filter_family_4], group = data$family_id[filter_family_4]) + 
+       ggtitle(paste0("PPCheck families with >= 4 patients for ", model_def$name)) +
+       small_labels
+    ) %>% out_func
+  }
+
+  filter_family_3 <- data %>% group_by(family_id) %>% mutate(include = !any(is.na(family_id)) & length(unique(ID)) == 3) %>% pull(include)
+  if("family_3" %in% types) {
+    (my_ppc_bars_grouped(data$phenotype_value[filter_family_3], predicted[, filter_family_3], group = data$family_id[filter_family_3]) + 
+       ggtitle(paste0("PPCheck families with exactly 3 patients for ", model_def$name)) +
+       small_labels
+    ) %>% out_func
+  }
+  
+  
   if("gene_lof" %in% types) {
     (my_ppc_bars_grouped(data$phenotype_value, predicted, group = interaction(data$loss_of_function, gene_groups)) + ggtitle(paste0("PPCheck gene_lof for ", model_def$name))) %>% out_func
   }

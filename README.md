@@ -16,7 +16,11 @@ Contents of the files:
 
 ## Rerunning the analysis
 
+
 To rerun, you need to install `brms` whic requires `rstan`. Installing `rstan` directly with `install.package` may fail on some systems - see https://github.com/stan-dev/rstan/wiki/RStan-Getting-Started for more details.
+
+The model fitting for the analyses may be time consuming. To avoid recomputing, fits are stored in the `stored_fits` directory, which is created on the fly. To save you time refitting, you can download the fits we used at: https://zenodo.org/record/2539299 (DOI: 10.5281/zenodo.2539299). Downloading the fits should also let you rerun the code without completely configuring `rstan`.
+
 
 You can rerun the complete analysis be knitting `master_document.Rmd`, but the individual parts can also be executed/knitted separately.
 
@@ -24,6 +28,4 @@ You can rerun the complete analysis be knitting `master_document.Rmd`, but the i
 
 `alternative_models.Rmd` is self-sufficient and can be run directly. This will fit a large number of relatively large models and may take upwards of a day even on a powerful machine.
 
-To run `multiverse_analysis.Rmd` you need to run `alternative_models.Rmd` first, but after that it is pretty quick.  
-
-To avoid recomputing, fits are stored in the `stored_fits` directory, which is created on the fly. To save you time refitting, you can download the fits we used at: https://zenodo.org/record/2539299 (DOI: 10.5281/zenodo.2539299)
+To run `multiverse_analysis.Rmd` you need to run `alternative_models.Rmd` first (or download fitted models), but after that it is pretty quick.  

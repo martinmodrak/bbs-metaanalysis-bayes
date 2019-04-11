@@ -331,7 +331,7 @@ freq_conclusions <- freq_conclusions %>%
   mutate(model_nice = paste0("frequentist ", gsub("p-value-","", model_name)), Category = "Freq.")
 ```
 
-```{r, fig.width = 8, fig.height = 4.5}
+```{r, fig.width = 8, fig.height = 4.8}
 nice_model_name <- function(x)  {
   x %>% gsub("only","none", .) %>% 
     gsub("lof_per_gene","cLOF (by gene)", .) %>% 
@@ -361,7 +361,7 @@ evaluation_processed <- evaluation %>%
   mutate(Probability = pmin(pmax(Probability, min_prob),max_prob), #Avoid probabilities of 0 and 1
          Conclusion = factor(Conclusion, levels = levels(freq_conclusions$Conclusion)),
          Category = case_when(model_name %in% c("gene_source", "gene_source_lof", "gene_source_filtered_lof") ~ "Main",
-                              model_name %in% c("gene_only", "gene_lof", "gene_lof_per_gene", "gene_only_filtered_lof") ~ "Bad fits", 
+                              model_name %in% c("gene_only", "gene_lof", "gene_lof_per_gene", "gene_only_filtered_lof", "gene_source_very_narrow") ~ "Bad fits", 
                               TRUE ~ "Secondary") %>% factor(levels = c("Main","Secondary","Bad fits")))
 
 plots_na_color <- "#606060"
@@ -449,7 +449,7 @@ freq_conclusions_plot
 
 Heatmap of p-values from frequentist analysis for the same conclusions (exact computations described in the main body of the paper).
 
-```{r, fig.width= 9, fig.height=4.5}
+```{r, fig.width= 9, fig.height=4.8}
 build_combined_conclusions_plot <- function(freq_conclusions_plot, conclusions_plot, rel_widths_plots, rel_widths_legend, rel_heights_legend) {
   hide_guide_theme <- theme(legend.position = 'none')
   hide_y_axis_theme <- theme(axis.title.y = element_blank(), 
@@ -469,7 +469,7 @@ build_combined_conclusions_plot <- function(freq_conclusions_plot, conclusions_p
   )
 }
 
-combined_conclusions_plot <- build_combined_conclusions_plot(freq_conclusions_plot, conclusions_plot, rel_widths_plots = c(1, 1.1), rel_widths_legend = c(4,1), rel_heights_legend = c(1,1.9,0.5)) 
+combined_conclusions_plot <- build_combined_conclusions_plot(freq_conclusions_plot, conclusions_plot, rel_widths_plots = c(0.95, 1.1), rel_widths_legend = c(4,1), rel_heights_legend = c(1,1.9,0.5)) 
 combined_conclusions_plot
 ```
 
@@ -497,7 +497,7 @@ combined_conclusions_main_plot
 
 
 ```{r}
-combined_conclusions_plot %>% ggsave(here("tmp_pics","conclusions.pdf"), ., width = 9, height = 4.5)
+combined_conclusions_plot %>% ggsave(here("tmp_pics","conclusions.pdf"), ., width = 9, height = 4.8)
 combined_conclusions_main_plot %>% ggsave(here("tmp_pics","conclusions_main.pdf"), ., width = 7, height = 3.8)
 ```
 
