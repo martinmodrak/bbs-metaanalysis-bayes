@@ -112,6 +112,15 @@ run_pp_checks <- function(model_def, fit, data_long,
        small_labels
     ) %>% out_func
   }
+  if("ethnic_group" %in% types) {
+    (my_ppc_bars_grouped(data$phenotype_value, predicted, group = data$ethnic_group) + ggtitle(paste0("PPCheck ethnic group for ", model_def$name))) %>% out_func
+  }
+  
+  filter_ethnicity_10 <- data %>% group_by(ethnicity) %>% mutate(include = length(unique(ID)) >= 10) %>% pull(include)
+  
+  if("ethnicity_10" %in% types) {
+    (my_ppc_bars_grouped(data$phenotype_value[filter_ethnicity_10], predicted[, filter_ethnicity_10], group = data$ethnicity[filter_ethnicity_10]) + ggtitle(paste0("PPCheck ethnicities with >= 10 patients for ", model_def$name))) %>% out_func
+  }
   
   
   if("gene_lof" %in% types) {

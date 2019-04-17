@@ -25,33 +25,47 @@ age_transform_from_age <- function(age) {
   }
 }
 
-read_main_data <- function() {
-  
-  data <- read_excel(here("data","UPDATE2 SuppInfo Table S3 dataset.xlsx"), sheet = "List1") %>%
+read_data_base <- function(filename, sheet, ...) {
+  read_excel(filename, sheet = sheet) %>%
     rename(case_no = "source case n.", 
            additional_mutations = "additional mutations", 
            mutation_types = "mut/mut",
+           ethnic_group = "ethnic group",
            family_id = FamilyID) %>%
     filter(!is.na(source) | !is.na(gene)) %>% #NA in source is only in the empty rows at the end of the table
     select(source, case_no, family_id, gene, mutation_types, 
-           sex, age, RD:DD) %>%
+           sex, age, ethnic_group, ethnicity, ... , RD:DD) %>%
     mutate(
-           CI = convert_uncertain_phenotype(CI),
-           LIV = convert_uncertain_phenotype(LIV),
-           REN = convert_uncertain_phenotype(REN),
-           REP = convert_uncertain_phenotype(REP),
-           DD = convert_uncertain_phenotype(DD),
-           family_id = factor(family_id, exclude = "NA"),
-           sex = factor(toupper(sex)), 
-           source = factor(source),
-           loss_of_function = factor(case_when(
-                                     is.na(mutation_types) ~ "unknown",
-                                     mutation_types == "trunc/trunc" ~ "certain",
-                                     TRUE ~ "unknown"
-                                     ), levels = c("unknown","certain")),
-           loss_of_function_certain = as.numeric(loss_of_function == "certain")
+      CI = convert_uncertain_phenotype(CI),
+      LIV = convert_uncertain_phenotype(LIV),
+      REN = convert_uncertain_phenotype(REN),
+      REP = convert_uncertain_phenotype(REP),
+      DD = convert_uncertain_phenotype(DD),
+      family_id = factor(family_id, exclude = "NA"),
+      sex = factor(toupper(sex)), 
+      source = factor(source),
+      loss_of_function = factor(case_when(
+        is.na(mutation_types) ~ "unknown",
+        mutation_types == "trunc/trunc" ~ "certain",
+        TRUE ~ "unknown"
+      ), levels = c("unknown","certain")),
+      loss_of_function_certain = as.numeric(loss_of_function == "certain")
     ) %>%
-    rowid_to_column("ID") %>%  
+    rowid_to_column("ID") %>%
+    #Code BBS to help ordering
+    mutate(gene = factor(gsub("BBS([0-9])$","BBS0\\1", gene))) %>%
+    
+    
+    #Introduce functional groups
+    mutate(functional_group = 
+             functional_group_for_gene(gene) %>% factor()
+    ) 
+  
+}
+
+read_main_data <- function() {
+  
+    data <- read_data_base(here("data","UPDATE5 SuppInfo Table S3 dataset.xlsx"), sheet = "List1") %>%  
     
     #Get age categories
     mutate(age_corr = if_else(age == "5 month", as.character(5/12), gsub(",",".", age)),
@@ -86,17 +100,9 @@ read_main_data <- function() {
                age_corr == "60+" ~ 70
              ),
            age_std_for_model = age_transform_from_age(age_numbers_groups_guessed)(age_numbers_groups_guessed)
-    ) %>%
-    
-    
-    #Code BBS to help ordering
-    mutate(gene = factor(gsub("BBS([0-9])$","BBS0\\1", gene))) %>%
-    
-    
-    #Introduce functional groups
-    mutate(functional_group = 
-             functional_group_for_gene(gene) %>% factor()
     ) 
+    
+    
   
   if(!all(is.na(data$age) == is.na(data$age_group))) {
     stop("Error in age transforms")
@@ -114,6 +120,9 @@ read_main_data <- function() {
   data
 }
 
+read_validation_data <- function() {
+  read_data_base(here("private_data","2019-04-16 London data for revision v04.xlsx"), sheet = "Sheet1", eGFR)
+}
 
 data_long_from_data  <- function(data) {
   data_long_all <- data %>% 

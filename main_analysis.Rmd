@@ -29,7 +29,6 @@ source(here("models_funcs.R"))
 source(here("plots.R"))
 
 
-stored_fits_dir <- "stored_fits"
 if(!dir.exists(here(stored_fits_dir))) {
   dir.create(here(stored_fits_dir))
 }
@@ -231,7 +230,6 @@ We use a generalized linear model with logit link and hierarchial terms. Let us 
 For the model, we expand the data into long form, i.e. each row in the dataset corresponds to a combination of patient and reported phenotype (a patient with reported values for 3 phenotypes would correspond to 3 rows in the long form dataset). The model is specified with the following brms formula, using the Bernoulli family with logit link function:
 
 ```{r}
-main_model_def <- models_base$gene_source_lof
 cat(strwrap(as.character(main_model_def$formula)[1], width = 80, prefix = "\n\t", initial = "" ))
 
 ```
@@ -436,7 +434,7 @@ for(type in types) {
 
 ## Discrepancies between frequentist and Bayesian analysis
 
-Here we try to understand why the frequentist and Bayesian analyses provided different results for some of the questions we asked. In all cases the answer is that there is substantial between-study variability, which, when taken into account, prevents us from making firm conclusions about some of the comparisons that are significant in the frequentist analysis.
+Here we try to understand why the frequentist and Bayesian analyses provided different results for some of the questions we asked. In all cases the answer is that there is substantial between-study variability, which, when taken into account, prevents us from making firm conclusions about some of the comparisons that are significant in the frequentist analysis (which ingores between-study variability).
 
 ### CI phenotype and BBS7
 
@@ -510,7 +508,7 @@ plot_all_diffs_to_single_gene(data_long, "CI", "BBS07", bbs_genes_to_check)
 
 ```
 
-Once again, each dot is a study, the dot size corresponds to the number of patients with the mutation on x-axis and the y-axis shows the difference in prevalence against BBS7 (positive - BBS7 has higher prevalence). Once again most studies show no or positive difference, but some studies show negative difference and for BBS08 there are actually more studies showing effect in the opposite direction. This means that the model cannot conclude that BBS7 has higher 
+Once again, each dot is a study, the dot size corresponds to the number of patients with the mutation on x-axis and the y-axis shows the difference in prevalence against BBS7 (positive - BBS7 has higher prevalence). Once again most studies show no or positive difference, but some studies show negative difference and for BBS08 there are actually more studies showing effect in the opposite direction. This means that the model cannot conclude neither that BBS7 has higher prevalence of CI than each other mutation individually or (weaker) than the average of other mutations.
 
 
 ### HEART phenotype and BBS2

@@ -13,6 +13,7 @@ genes_to_show_from_data <- function(data) {
 intercept_prior <- prior(normal(0,2), class = Intercept)
 b_prior <- prior(normal(0,2), class = b)
 sd_prior <- prior(normal(0,2), class = sd)
+family_sd_prior <- prior(normal(0,1), class = sd, coef = "family_id")
 
 default_priors <- c(intercept_prior, sd_prior)
 
@@ -22,7 +23,7 @@ formula_gene_only <- brmsformula(phenotype_value ~ (1||phenotype) + ((0 + phenot
 formula_gene_source <- brmsformula(update(formula_gene_only, ~ . + ((0 + phenotype)||source)) , family = "bernoulli")
 
 add_lof <- function(original_formula) {
-  brmsformula(update(original_formula, ~ . + phenotype : loss_of_function_certain) , family = "bernoulli")
+  brmsformula(update(original_formula, ~ . +  phenotype : loss_of_function_certain) , family = "bernoulli")
 }
 add_lof_per_gene <- function(original_formula) {
   brmsformula(update(original_formula, ~ . + ((0 + phenotype : loss_of_function_certain)||gene)) , family = "bernoulli")
@@ -34,8 +35,10 @@ formula_gene_lof_per_gene <- add_lof_per_gene(formula_gene_lof)
 formula_gene_source_lof <- add_lof(formula_gene_source)
 formula_gene_source_lof_per_gene <- add_lof_per_gene(formula_gene_source_lof)
 
+formula_gene_source_family <- brmsformula(update.formula(formula_gene_source,  ~ . + (1||family_id)), family = "bernoulli")
 formula_gene_source_lof_family <- brmsformula(update.formula(formula_gene_source_lof,  ~ . + (1||family_id)), family = "bernoulli")
 
+formula_gene_source_lof_ethnic_group <- brmsformula(update.formula(formula_gene_source_lof,  ~ . + (1||ethnic_group : phenotype)), family = "bernoulli")
 
 formula_gene_source_sex <- brmsformula(update.formula(formula_gene_source,  ~ . + (1||sex : phenotype)), family = "bernoulli")
 
@@ -89,11 +92,23 @@ models_base <- list(
     note = "",
     additional_components = c("source", "lof"), filter = "none"
   ),
+  gene_source_family = list(
+    formula = formula_gene_source_family, 
+    priors = c(default_priors, family_sd_prior), 
+    note = "",
+    additional_components = c("source","family"), filter = "family"
+  ),
   gene_source_lof_family =  list(
     formula = formula_gene_source_lof_family,
-    priors = c(default_priors, b_prior),
+    priors = c(default_priors, b_prior, family_sd_prior),
     note = "",
     additional_components = c("source", "lof", "family"), filter = "family"
+  ),
+  gene_source_lof_ethnic_group =  list(
+    formula = formula_gene_source_lof_ethnic_group,
+    priors = c(default_priors, b_prior),
+    note = "",
+    additional_components = c("source", "lof", "ethnic_group"), filter = "ethnic_group"
   ),
   
   gene_source_lof_wide = list(
@@ -243,3 +258,5 @@ models_imputed <- list(
   })
 
 all_models <- c(models_base, models_imputed)
+
+main_model_def <- models_base$gene_source_lof

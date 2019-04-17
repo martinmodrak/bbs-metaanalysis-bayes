@@ -45,7 +45,7 @@ genes_to_show <- genes_to_show_from_data(data)
 all_fits <- all_models %>% map(function(def) {
   stored_fit_file <- paste0(here(stored_fits_dir,def$name), ".rds")
   if(!file.exists(stored_fit_file)) {
-    stop(paste0("Computed fit for model '", def$name,"' cannot be found at ", stored_fit_file, ".\nYou probably need to run alternative_models.Rmd to compute all fits"))
+    stop(paste0("Computed fit for model '", def$name,"' cannot be found at ", stored_fit_file, ".\nYou probably need to run alternative_models.Rmd to compute all fits  (or download the fits from Zenodo)"))
   }
   readRDS(stored_fit_file)
 })

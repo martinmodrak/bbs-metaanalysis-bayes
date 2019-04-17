@@ -1,0 +1,92 @@
+---
+title: "Appendix: Validating on new dataset"
+output:
+  pdf_document: 
+     toc: true
+---
+
+```{r setup_main, echo=FALSE, message = FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo=FALSE)
+library(rstan)
+library(brms)
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+library(skimr)
+library(readxl)
+library(here)
+library(tidyverse)
+library(tidybayes)
+library(bayesplot)
+library(cowplot)
+library(knitr)
+library(svglite)
+
+
+source(here("data_processing.R"))
+source(here("models.R"))
+source(here("models_funcs.R"))
+source(here("plots.R"))
+
+```
+
+
+```{r}
+validation_data <- read_validation_data()
+skim_with(numeric = list(hist = NULL, sd = NULL, p0 = NULL, p25 = NULL, p50 = NULL, p75 = NULL, p100 = NULL, n_unique = n_unique), character = list(empty = NULL), factor = list(top_counts = NULL, ordered = NULL))
+validation_data %>%  select(-ID, -age,-family_id) %>% skim() 
+```
+
+```{r}
+stored_fit_file <- paste0(here(stored_fits_dir,main_model_def$name), ".rds")
+if(!file.exists(stored_fit_file)) {
+  stop(paste0("Computed fit for model '", def$name,"' cannot be found at ", stored_fit_file, ".\nYou probably need to run main_analysis.Rmd first to compute the fit (or download the fits from Zenodo)"))
+}
+fit <- readRDS(stored_fit_file)
+
+```
+
+```{r}
+validation_data_long <- data_long_from_data(validation_data)
+validation_samples <- get_tidy_samples(fit, validation_data_long)
+```
+
+true phenotype vs. predicted phenotype log odds
+
+```{r}
+validation_samples %>% 
+  group_by(source, sample, phenotype) %>%
+  mutate(value_diff = value - mean(value), true_diff = phenotype_value - mean(phenotype_value)) %>%
+  filter(phenotype == "REN") %>%
+  group_by(ID, phenotype) %>%
+  sample_n(20) %>%
+  ungroup() %>%
+  ggplot(aes(x = true_diff, y = value_diff)) + 
+  #geom_boxplot(outlier.shape = NA) +
+  #geom_jitter(height = 0, width = 0.2, alpha = 0.1) +
+  geom_point(alpha = 0.1) +
+  geom_smooth(method = "lm")
+  #scale_y_log10() +
+  
+  #facet_wrap(loss_of_function~gene)
+```
+```{r}
+data_for_prediction <- data_for_prediction_base_model(main_model_def, genes_to_show, phenotypes_to_show)
+
+data_for_prediction_BBSome <- data_for_prediction %>% filter(functional_group_for_gene(gene) == "BBSome", gene != "BBS18")
+
+```
+
+
+```{r}
+plot_gene_phenotype_differences_estimates(fit, data_for_prediction_BBSome, data_original = validation_data_long %>% filter(loss_of_function_certain == 1))
+```
+
+
+eGFR vs. predikovane REN
+
+```{r}
+validation_fit <- fit_base_model(main_model_def, validation_data_long)
+```
+
+
+Konkretni tvrzeni pak ocheckovat v multiverse_analysis s nafitovaným modelem

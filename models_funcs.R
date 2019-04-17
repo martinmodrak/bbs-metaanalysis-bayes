@@ -5,6 +5,7 @@ filter_data_by_model_def <- function(def, data_long) {
           "family" = data_long %>% filter(!is.na(family_id)),
           "age" = data_long %>% filter(!is.na(age_std_for_model)),
           "sex" = data_long %>% filter(!is.na(sex)),
+          "ethnic_group" = data_long %>% filter(ethnic_group != "NA"),
           "age_sex" = data_long %>% filter(!is.na(age_std_for_model), !is.na(sex)),
           stop("Unrecognized filter")
   )  
@@ -50,7 +51,10 @@ fit_imputed_model <- function(def, data_imputed) {
       control = list(adapt_delta = 0.95))   
 }
 
-data_for_prediction_base_model <- function(def, genes_to_show, phenotypes_to_show, age_transform = NULL, ages = c(10,30,50),                                            sexes = c("F","M")) {
+data_for_prediction_base_model <- function(def, genes_to_show, phenotypes_to_show, 
+                                           age_transform = NULL, 
+                                           ages = c(10,30,50), sexes = c("F","M"),
+                                           ethnic_groups = "EG-D") {
   result <-  tibble(gene = genes_to_show) %>%
     crossing(tibble(phenotype = phenotypes_to_show)) %>% 
     mutate(functional_group = functional_group_for_gene(gene))
@@ -76,6 +80,10 @@ data_for_prediction_base_model <- function(def, genes_to_show, phenotypes_to_sho
   
   if("sex" %in% def$additional_components) {
     result <- result %>% crossing(tibble(sex = sexes))
+  }
+  
+  if("ethnic_group" %in% def$additional_components) {
+    result <- result %>% crossing(tibble(ethnic_group = ethnic_groups))
   }
   
   result
@@ -108,7 +116,9 @@ get_samples_pairwise_diff <- function(model_def, samples_tidy) {
            "lof" = c("loss_of_function_certain" = "loss_of_function_certain"),
            "age" = c("age_std_for_model" = "age_std_for_model"),
            "sex" = c("sex" = "sex"),
-           "source" = c()
+           "ethnic_group" = c("ethnic_group" = "ethnic_group"),
+           "family" = c("family" = "family"), 
+           "source" = c("source" = "source")
     )
   }
   

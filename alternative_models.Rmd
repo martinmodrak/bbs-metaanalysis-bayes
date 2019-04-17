@@ -62,6 +62,8 @@ models_base %>% walk(function(def) {
 })
 ```
 
+The default priors are $N(0,2)$ for all model coefficients (half-normal for standard deviations). Very narrow, narrow and wide put $N(0,0.1)$, $N(0,1)$ and $N(0,5)$ respectively for the sd for `gene`.
+Since `family_id` is a very fine-grained predictor, it's sd is given a $N(0,1)$ prior.
 
 ```{r fit_base_models, results = "hide"}
 fits_base <- models_base %>%
@@ -246,7 +248,7 @@ Having cLOF coefficient differ per gene does not bring noticeable improvements:
 pp_check_helper("gene_source_lof_per_gene", c("phenotype_lof","gene_lof"))
 ```
 
-### Family information
+### Family information is of relatively minor influence
 
 We see the the `gene_source_lof` model already does not do badly in predicting prevalence within families, although including family in the model is definitely an improvement for some families.
 
@@ -258,7 +260,31 @@ pp_check_helper(c("gene_source_lof", "gene_source_lof_family"), "family_4")
 pp_check_helper(c("gene_source_lof", "gene_source_lof_family"), c("family_3"))
 ```
 
-TODO: what to conclude from this?
+We also see that family alone does a good job of explaining cLOF:
+```{r, fig.height=3}
+pp_check_helper("gene_source_family", c("phenotype_lof","gene_lof"))
+```
+This is not surprising - most families will have the same mutation and therefore family encodes generally more information than cLOF (albeit the coefficient for family is shared between phenotypes).
+
+We however consider the improvements to be small, while adding family greatly increases uncertainty of the model, as it is a very fine grained predictor.
+
+### Ethnicity and ethnic groups
+
+
+```{r, fig.height = 3}
+pp_check_helper(c("gene_source_lof", "gene_source_lof_ethnic_group"), c("ethnic_group"))
+```
+We see that `gene_source_lof` does a good job of fitting most ethnic groups, except for F, G and H where the fit is only OK and is improved upon by including ethnic group in the model. However, the badly fitted ethnic groups are exactly those with the fewest patients and so probably can be safely ignored:
+
+```{r}
+data %>% group_by(ethnic_group) %>% summarise(count = n()) %>% kable()
+```
+
+Finally we see that `gene_source_lof` fits well even when looking at specific ethnicities and adding ethnic group does not really improve the picture.
+
+```{r, fig.height = 4}
+pp_check_helper(c("gene_source_lof", "gene_source_lof_ethnic_group"), c("ethnicity_10"))
+```
 
 ### Prior width
 
@@ -271,5 +297,5 @@ Otherwise we didn't find a good reason to prefer either of the "narrow", normal 
 
 ### Model selection verdict
 
-We have shown that source (between-study variability) has to be included and there is an advantage in including cLOF per phenotype, but not much improvement when including cLOF per phenotype and gene. Since the `gene_source_lof_per_gene` model is too flexible for the limited amount of data (results in very wide posterior intervals, spanning odds ratio up to 10000), we think `gene_source_lof` is a better choice.
+We have shown that source (between-study variability) has to be included and there is an advantage in including cLOF per phenotype, but not much improvement when including cLOF per phenotype and gene. Since the `gene_source_lof_per_gene` model is too flexible for the limited amount of data (results in very wide posterior intervals, spanning odds ratio up to 10000), we think `gene_source_lof` is a better choice. We have further shown that adding family or ethnic group information improves the fit only a little and will therefore not be included.
 
