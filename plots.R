@@ -11,7 +11,7 @@ base_theme <- theme(
                     strip.text = element_text(size = base_theme_font_size),
                     plot.title = element_text(size = base_theme_font_size + 2))
 
-scale_color_functional_group <- scale_color_manual(values = c(BBS03 = "#f8766dff", BBSome = "#5f8dd3ff", Chaperonins = "#aa8800ff"))
+scale_color_functional_group <- scale_color_manual(values = c(BBS03 = "#f8766dff", BBSome = "#5f8dd3ff", Chaperonins = "#aa8800ff", Others = "#43aa8b"))
 
 bbs_labeller <- function(x) {
   gsub("BBS0","BBS", as.character(x), fixed = TRUE)
