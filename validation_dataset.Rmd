@@ -88,7 +88,7 @@ plot_predicted_vs_observed <- function(observed_diffs, predicted_diffs, ...) {
     geom_hline(yintercept = 0, color = "darkred")+ 
     geom_linerange(aes(ymin = lower50, ymax = upper50), size = 2) +
     geom_linerange() +
-    geom_point(aes(x = gene, y = prevalence_diff, size = n_cases, shape = source), data = observed_diffs, inherit.aes = FALSE, alpha = 0.4)  +
+    geom_point(aes(x = gene, y = prevalence_diff, size = n_cases, shape = source), data = observed_diffs, inherit.aes = FALSE, alpha = 0.8, position = position_nudge(x = 0.3))  +
     facet_wrap(~phenotype, scales = "free_y", ncol = 3) +
     scale_size_continuous(range = c(1.5,4)) +
     scale_color_functional_group +
@@ -99,8 +99,6 @@ plot_predicted_vs_observed <- function(observed_diffs, predicted_diffs, ...) {
 
 
 ```{r, fig.width=10, fig.height=7}
-
- 
 plot_predicted_vs_observed(observed_diffs, predicted_diffs, loss_of_function_certain == 1)
 plot_predicted_vs_observed(observed_diffs, predicted_diffs, loss_of_function_certain == 0)
  
@@ -108,14 +106,25 @@ plot_predicted_vs_observed(observed_diffs, predicted_diffs, loss_of_function_cer
 
 
 ```{r}
+set.seed(543248822)
 data_calibration <- observed_diffs %>% inner_join(predicted_diffs, by = c("source", "phenotype", "gene", "loss_of_function_certain"), suffix = c(".observed",".predicted")) %>% 
   group_by(source, phenotype, gene, loss_of_function_certain) %>%
   summarise(n_less = sum(prevalence_diff.predicted < prevalence_diff.observed),
-            n_equal = sum(prevalence_diff.predicted == prevalence_diff.observed)) %>%
+            n_equal = sum(prevalence_diff.predicted == prevalence_diff.observed),
+            mean_predicted = mean(prevalence_diff.predicted),
+            lower_predicted = quantile(prevalence_diff.predicted, posterior_interval_bounds[1]),
+              upper_predicted = quantile(prevalence_diff.predicted, posterior_interval_bounds[2]),
+              lower50_predicted = quantile(prevalence_diff.predicted, 0.25),
+              upper50_predicted = quantile(prevalence_diff.predicted, 0.75),
+            observed = mean(prevalence_diff.observed),
+            sd_observed = sd(prevalence_diff.observed)) %>%
   ungroup() %>%
   #Randomly choose order with respect to those that make equal predictions
   mutate(order_within = round(n_less -0.5 + runif(n()) * (n_equal + 1)))
 
+if(any(data_calibration$sd_observed > 0)) {
+  stop("Problem")
+}
 
 plot_calibration <- function(data_calibration, predicted_diffs, n_bins) {
   n_samples <- length(unique(predicted_diffs$sample))
@@ -129,7 +138,8 @@ plot_calibration <- function(data_calibration, predicted_diffs, n_bins) {
     ggplot(aes(x = order_within)) + 
     geom_segment(aes(x=0,y=mean,xend=n_samples,yend=mean),colour="grey25") +
     geom_polygon(data=data.frame(x=c(-0.1*n_samples,0,-0.1*n_samples,1.1*n_samples,n_samples,1.1 * n_samples,-0.1*n_samples),y=c(lower,mean,upper,upper,mean,lower,lower)),aes(x=x,y=y),fill="grey45",color="grey25",alpha=0.5) +
-    geom_histogram(breaks = breaks, closed = "left" ,fill="#A25050",colour="black")
+    geom_histogram(breaks = breaks, closed = "left" ,fill="#A25050",colour="black") +
+    base_theme
 }
 ```
 
@@ -140,23 +150,94 @@ plot_calibration(data_calibration, predicted_diffs, n_bins = 13)
 plot_calibration(data_calibration, predicted_diffs, n_bins = 34)
 ```
 
+```{r}
+data_calibration %>% ggplot(aes(x = observed, y = mean_predicted))  +
+  geom_abline(slope = 1, intercept = 0, color = "blue") +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  base_theme
+
+  #geom_point(alpha = 0.5) 
+  
+```
+
 
 eGFR vs. predikovane REN
 
 ```{r}
-samples_to_use <- sample(unique(validation_samples$sample), 100)
-validation_samples %>% 
-  filter(phenotype == "REN", !is.na(eGFR)) %>%
-  group_by(source, sample) %>%
-  mutate(relative = odds / exp(mean(log(odds)))) %>% #value - mean(value)) %>%
-  ungroup() %>%
-  filter(sample %in% samples_to_use) %>%
-  ggplot(aes(x = eGFR, y = relative)) + geom_jitter(alpha = 0.1) +
-  scale_y_log10() +
-  geom_smooth(method = "lm")
+genes_with_egfr <- validation_data_long %>% filter(phenotype == "REN", !is.na(eGFR)) %>%
+  group_by(gene) %>%
+  summarise(n = n()) %>% 
+  filter(n > 2) %>%
+  pull(gene)
+
+#For some reason I need predictions with all phenotypes
+data_for_predictions_egfr <- data_for_prediction_base_model(main_model_def, unique(validation_data$gene), phenotypes_to_show, loss_of_function_certain = c(0,1))
+
+predictions_egfr <- get_tidy_samples(fit, data_for_predictions_egfr) %>% filter(phenotype == "REN")
+
 ```
 
 
+```{r}
+
+egfr_plot_data <- predictions_egfr %>% 
+  #group_by(sample, loss_of_function) %>%
+  group_by(sample) %>%
+  mutate(mean_value = mean(value), relative = odds / (mean_value / (1 - mean_value) )) %>% 
+  #group_by(loss_of_function, gene, functional_group) %>%
+  group_by(gene, functional_group) %>%
+  summarise(Estimate = median(relative), 
+              lower = quantile(relative, posterior_interval_bounds[1]),
+              upper = quantile(relative, posterior_interval_bounds[2]),
+              lower50 = quantile(relative, 0.25),
+              upper50 = quantile(relative, 0.75)
+  ) %>% ungroup() %>%
+  filter(gene %in% genes_with_egfr)
+
+gene_order <- egfr_plot_data %>% group_by(gene) %>% summarise(Estimate = mean(Estimate)) %>% arrange(Estimate) %>% pull(gene)
+
+prediction_egfr_plot <- egfr_plot_data %>%
+  mutate(gene = factor(gene, levels = gene_order)) %>%
+  ggplot(aes(x = gene, y = Estimate, ymin = lower, ymax = upper, color = functional_group)) + 
+  geom_hline(yintercept = 1, color = "darkred")+ 
+  geom_linerange(aes(ymin = lower50, ymax = upper50), size = 2) +
+  geom_linerange() +
+  #facet_wrap(~loss_of_function) +
+  scale_color_functional_group +
+  base_theme
+
+data_egfr_plot <- validation_data_long %>% 
+  filter(phenotype == "REN", gene %in% genes_with_egfr, !is.na(eGFR)) %>%
+  mutate(gene = factor(gene, levels = gene_order)) %>%
+  ggplot(aes(x = gene, y = eGFR, color = functional_group)) +
+    geom_jitter(alpha = 0.5, width = 0.2, height = 0) +
+    geom_boxplot(fill = "transparent", outlier.shape = NA) +
+    scale_color_functional_group +
+    #facet_wrap(~loss_of_function) +
+    base_theme
+           
+plot_grid(prediction_egfr_plot, data_egfr_plot, nrow = 2, align = "v")
+#samples_to_use <- sample(unique(validation_samples$sample), 100)
+# validation_samples %>% 
+#   filter(phenotype == "REN") %>%
+#   group_by(source, sample, loss_of_function) %>%
+#   #mutate(relative = odds / exp(mean(log(odds)))) %>% 
+#   mutate(relative = value - mean(value)) %>%
+#   ungroup() %>%
+#   filter(sample %in% samples_to_use, !is.na(eGFR)) %>%
+#   ggplot(aes(x = eGFR, y = relative)) + geom_jitter(alpha = 0.1) +
+#   #scale_y_log10() +
+#   facet_wrap(~loss_of_function) +
+#   geom_smooth(method = "lm")
+```
+
+
+```{r}
+validation_data_long %>% 
+  filter(phenotype == "REN", gene %in% genes_with_egfr, !is.na(eGFR)) %>%
+  group_by(loss_of_function, gene) %>% summarise(mean(eGFR))
+```
 
 
 ```{r}

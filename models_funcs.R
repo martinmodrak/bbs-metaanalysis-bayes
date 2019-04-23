@@ -54,7 +54,7 @@ fit_imputed_model <- function(def, data_imputed) {
 data_for_prediction_base_model <- function(def, genes_to_show, phenotypes_to_show, 
                                            age_transform = NULL, 
                                            ages = c(10,30,50), sexes = c("F","M"),
-                                           ethnic_groups = "EG-D") {
+                                           ethnic_groups = "EG-D", loss_of_function_certain = 1) {
   result <-  tibble(gene = genes_to_show) %>%
     crossing(tibble(phenotype = phenotypes_to_show)) %>% 
     mutate(functional_group = functional_group_for_gene(gene))
@@ -68,7 +68,8 @@ data_for_prediction_base_model <- function(def, genes_to_show, phenotypes_to_sho
   }
   
   if("lof" %in% def$additional_components || "lof per gene" %in% def$additional_components) {
-    result$loss_of_function_certain = 1
+    result <- result %>% crossing(tibble(loss_of_function_certain = loss_of_function_certain)) %>%
+      mutate(loss_of_function = if_else(loss_of_function_certain == 1, "certain", "unknown"))
   }
   
   if("age" %in% def$additional_components) {
