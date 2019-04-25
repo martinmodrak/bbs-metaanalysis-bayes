@@ -77,16 +77,8 @@ n_genes_lof_different <- 5
 
 evaluator_lof <- function(def, fit) {
  if("lof" %in% def$additional_components || "lof per gene" %in% def$additional_components)  {
-   # phenotype_coeffs <- paste0("phenotype", phenotypes_to_use,":loss_of_function_certain")
-   # genes_to_check <- sprintf("BBS%02d",c(1,2,4,5,7,8,9))
-   # samples_raw <- coef(fit, summary = FALSE)$gene[,genes_to_check,phenotype_coeffs]
-   # #grid <- list(sample = 1:(dim(samples_raw)[1]), gene = genes_to_check, phenotype = phenotypes_to_use)
-   # grid <- list(sample = 1:(dim(samples_raw)[1]), gene_id = 1:length(genes_to_check), phenotype_id = 1:length(phenotypes_to_use))
-   # samples_tidy <- expand.grid(grid)
-   #samples_tidy$lof_coef <- samples_raw[as.matrix(samples_tidy)]
-   #  samples_tidy %>% mutate(gene = genes_to_check[gene_id], phenotype = phenotypes_to_use[phenotype_id])
    
-   genes_to_check <- sprintf("BBS%02d",c(1,2,4,5,7,8,9))
+   genes_to_check <- bbsome_genes
    data_for_prediction_lof <- data_for_prediction_base_model(def, genes_to_check, phenotypes_to_show = phenotypes_to_show, age_transform = age_transform_from_age(data$age_numbers_groups_guessed))
    samples_tidy <- get_samples_lof_diff(fit, data_for_prediction_lof)
    
@@ -105,7 +97,7 @@ evaluator_lof <- function(def, fit) {
   
 ```{r}
 evaluator_functional_groups_lower <- function(group1, group2) {
-  function(samples_diff, samples_diff_bbsome, samples_prediction_bbsome, samples_linear_bbsome) {
+  function(samples_diff, samples_diff_bbsome, samples_prediction_bbsome) {
     target_column_name = paste(bbs_labeller(group1),"less severe than",bbs_labeller(group2))
     samples_diff %>% 
       filter(functional_group.x == group1, functional_group.y == group2) %>%
@@ -124,7 +116,7 @@ evaluators[["bbs3_vs_chaperonins"]] <- evaluator_functional_groups_lower("BBS03"
   *	The data suggest a difference between the severity of BBS in patients with mutations in different BBSome subunits.
     * Measured as posterior probability, that there is clinically relevant effect for at least `r min_phenotypes_for_diffs` phenotypes for at least `r min_bbsome_pairwise_for_diffs` pairwise comparisons. 
 ```{r}
-evaluators[["bbsome_genes_differ"]] <- function(samples_diff, samples_diff_bbsome, samples_prediction_bbsome, samples_linear_bbsome) {
+evaluators[["bbsome_genes_differ"]] <- function(samples_diff, samples_diff_bbsome, samples_prediction_bbsome) {
 samples_diff_bbsome %>% 
   filter(as.character(gene.x) > as.character(gene.y)) %>%
   group_by(sample, phenotype) %>%
@@ -158,23 +150,23 @@ samples_diff_bbsome %>%
     * Probability that odds for BBS4 are among the top 3 odds for at least 5 phenotypes
     * Probability that a patient with BBS4 has the highest total number of phenotypes present.
 ```{r}
-evaluators[["bbs04_top"]] <- function(samples_diff, samples_diff_bbsome, samples_prediction_bbsome, samples_linear_bbsome) {
+evaluators[["bbs04_top"]] <- function(samples_diff, samples_diff_bbsome, samples_prediction_bbsome) {
 samples_diff_bbsome %>% 
   filter(gene.x == "BBS04", gene.y != "BBS04") %>%
   group_by(sample, phenotype) %>%
-  summarise(bbs04_top = sum(odds_ratio < 1) <= 2) %>%
+  summarise(bbs04_top = mean(odds_ratio < 1) <= 2/length(bbsome_genes)) %>% #Switched to mean to work well with validation
   group_by(sample) %>%
   summarise(bbs04_top_all = sum(bbs04_top) >= 5 ) %>%
   summarise(`BBS4 top odds` = mean(bbs04_top_all))
 }
 ```
 ```{r}
-evaluators[["bbs04_most_pheno"]] <- function(samples_diff, samples_diff_bbsome, samples_prediction_bbsome, samples_linear_bbsome) {
+evaluators[["bbs04_most_pheno"]] <- function(samples_diff, samples_diff_bbsome, samples_prediction_bbsome) {
   samples_prediction_bbsome %>% 
     group_by(sample, gene) %>%
-    summarise(num_phenotypes = sum(value)) %>%
+    summarise(mean_phenotypes = mean(value)) %>% #Using mean instead of sum to play nice with uneven number of reported (for validation data)
     group_by(sample) %>%
-    mutate(has_most_pheno = num_phenotypes >= max(num_phenotypes) ) %>%
+    mutate(has_most_pheno = mean_phenotypes >= max(mean_phenotypes) ) %>%
     ungroup() %>%
     filter(gene == "BBS04") %>%
     #group_by(gene) %>%
@@ -184,7 +176,7 @@ evaluators[["bbs04_most_pheno"]] <- function(samples_diff, samples_diff_bbsome, 
   *	Mutations in different BBSome subunits predispose to different renal phenotype.
     *  Measured as posterior probability, that there is clinically relevant effect for at least `r min_bbsome_pairwise_for_diffs` pairwise comparisons. 
 ```{r}
-evaluators[["REN_bbsome_genes_differ"]] <- function(samples_diff, samples_diff_bbsome, samples_prediction_bbsome, samples_linear_bbsome) {
+evaluators[["REN_bbsome_genes_differ"]] <- function(samples_diff, samples_diff_bbsome, samples_prediction_bbsome) {
   samples_diff_bbsome %>% 
     filter(phenotype == "REN", as.character(gene.x) > as.character(gene.y)) %>%
     group_by(sample) %>%
@@ -198,7 +190,7 @@ evaluators[["REN_bbsome_genes_differ"]] <- function(samples_diff, samples_diff_b
     * Cognitive impairment is less frequent in BBS3 patients compared to other patients (all canonical BBS genes).
 ```{r}
 evaluator_prob_group_diff_all <- function(phenotype_name, group1, group2, group1_name = paste0(group1, collapse = "_"),group2_name = paste0(group2, collapse = "_")) {
-    function (samples_diff, samples_diff_bbsome, samples_prediction_bbsome, samples_linear_bbsome) {
+    function (samples_diff, samples_diff_bbsome, samples_prediction_bbsome) {
 
       target_column_name = paste0(phenotype_name,": ",bbs_labeller(group1_name)," more frequent than ", bbs_labeller(group2_name))
       samples_diff %>% 
@@ -241,7 +233,7 @@ evaluators[["LIVER_BBS4_all"]] <-  evaluator_prob_group_diff_all("LIV", paste0("
     * Polydactyly is more frequent in BBS2 patients compared to BBS1 patients.
 ```{r}
 evaluator_prob_pairwise_diff <- function(phenotype_name, gene_more_frequent, gene_less_frequent) {
-  function (samples_diff, samples_diff_bbsome, samples_prediction_bbsome, samples_linear_bbsome) {
+  function (samples_diff, samples_diff_bbsome, samples_prediction_bbsome) {
      target_column_name = paste0(phenotype_name,": ", bbs_labeller(gene_more_frequent), " more frequent than ", bbs_labeller(gene_less_frequent))
       samples_diff %>% 
         filter(phenotype == phenotype_name, gene.x == gene_more_frequent, gene.y == gene_less_frequent) %>%
@@ -300,18 +292,19 @@ evaluation <- all_models %>%
     
     samples_prediction_bbsome = get_tidy_samples_prediction(fit, data_for_prediction_bbsome)
     
-    samples_linear_bbsome <- get_tidy_samples(fit, data_for_prediction_bbsome, scale = "linear")
+    #samples_linear_bbsome <- get_tidy_samples(fit, data_for_prediction_bbsome, scale = "linear")
     
     lof_evaluation <- evaluator_lof(def, fit)
     
     evaluators %>% map(function(evaluator) {
-      evaluator(samples_diff, samples_diff_bbsome, samples_prediction_bbsome, samples_linear_bbsome)
+      evaluator(samples_diff, samples_diff_bbsome, samples_prediction_bbsome)
     }) %>% 
       do.call(cbind, .) %>% cbind(lof_evaluation, .) %>%
       mutate(model_name = def$name)
 })
 
 ```
+
 
 
 ```{r load_freqentist}
@@ -330,6 +323,7 @@ freq_conclusions <- freq_conclusions %>%
   gather("model_name","p", `p-value-all`, `p-value-cLOF`) %>%
   mutate(model_nice = paste0("frequentist ", gsub("p-value-","", model_name)), Category = "Freq.")
 ```
+
 
 ```{r, fig.width = 8, fig.height = 4.8}
 nice_model_name <- function(x)  {
@@ -361,7 +355,7 @@ evaluation_processed <- evaluation %>%
   mutate(Probability = pmin(pmax(Probability, min_prob),max_prob), #Avoid probabilities of 0 and 1
          Conclusion = factor(Conclusion, levels = levels(freq_conclusions$Conclusion)),
          Category = case_when(model_name %in% c("gene_source", "gene_source_lof", "gene_source_filtered_lof") ~ "Main",
-                              model_name %in% c("gene_only", "gene_lof", "gene_lof_per_gene", "gene_only_filtered_lof", "gene_source_very_narrow") ~ "Bad fits", 
+                              model_name %in% c("gene_only", "gene_lof", "gene_lof_per_gene", "gene_only_filtered_lof", "gene_source_very_narrow", "gene_imputed_age_sex") ~ "Bad fits", 
                               TRUE ~ "Secondary") %>% factor(levels = c("Main","Secondary","Bad fits")))
 
 plots_na_color <- "#606060"
@@ -415,7 +409,7 @@ Some patterns to notice:
 * Using very narrow priors on gene coefficients ($N(0,0.1)$, i.e., that almost all odds ratios should be less than $\sim 1.2$) unsurprisingly results in little evidence for directional differences between genes.
 * Other than noted above, the conclusions are not sensitive to model choice.
 
-## Combining with frequentist results
+## Frequentist results 
 
 ```{r}
 build_freq_conclusions_plot <- function(freq_conclusions, categories = TRUE) {
@@ -449,8 +443,117 @@ freq_conclusions_plot
 
 Heatmap of p-values from frequentist analysis for the same conclusions (exact computations described in the main body of the paper).
 
+## Validation dataset
+
+
+```{r evaluation_validation}
+validation_data <- read_validation_data()
+validation_data_long <- data_long_from_data(validation_data)
+
+#Turn validation data into "samples" that the evaluators can manage
+samples_validation <- validation_data_long %>%
+  group_by(source, phenotype, loss_of_function_certain, gene, functional_group) %>%
+  summarise(value = mean(phenotype_value)) %>%
+  ungroup() %>%
+  mutate(sample = source, odds = value / (1 - value)) 
+
+
+samples_diff_validation <- get_samples_pairwise_diff(main_model_def, samples_validation) %>%
+  mutate(odds_ratio = if_else(odds.x == odds.y, 1, odds_ratio)) %>% 
+  mutate(is_relevant = odds_ratio >= min_interesting_effect | odds_ratio <= 1 /min_interesting_effect)
+
+if(any(is.na(samples_diff_validation$odds_ratio))) {
+  stop("Problem")
+}
+
+
+samples_diff_bbsome_validation <- samples_diff_validation %>% 
+  filter(gene.x %in% bbsome_genes, gene.y %in% bbsome_genes)
+
+samples_prediction_bbsome_validation <- validation_data_long %>%
+  filter(gene %in% bbsome_genes) %>%
+  mutate(value = phenotype_value, sample = source)
+
+
+samples_lof_diff_validation <- samples_validation %>%
+  filter(loss_of_function_certain == 1) %>%
+    inner_join(samples_validation %>% filter(loss_of_function_certain == 0), 
+               by = c("phenotype" = "phenotype", "gene" = "gene", "source",
+                      "functional_group" = "functional_group")) %>%
+    mutate(odds_ratio = odds.x / odds.y) %>%
+    mutate(odds_ratio = if_else(odds.x == odds.y, 1, odds_ratio)) 
+
+if(any(is.na(samples_lof_diff_validation$odds_ratio))) {
+  stop("Problem")
+}
+
+
+
+#Note: this slightly differs from lof evaluation for model as I need to renormalize to have the same retio of genes/phenotypes required to be different. I also take equal odds of 0/Inf as odds_ratio > 1, i.e. equal odds are counted as negative evidence only when
+lof_evaluation_validation <-  samples_lof_diff_validation %>% 
+     group_by(source, phenotype) %>% summarise(enough_genes = mean(odds_ratio > 1 | (odds_ratio == 1 & (odds.x == 0 | odds.x == Inf))) >= n_genes_lof_different / length(bbsome_genes)) %>%
+     group_by(source) %>% summarise(enough_phenotypes = mean(enough_genes) >= min_phenotypes_for_diffs / 9) %>%
+     ungroup() %>% summarise(`cLOF mutations more severe` = mean(enough_phenotypes))
+ 
+#Apply the evaluators
+evaluation_validation <- evaluators %>% map( ~ .x(samples_diff_validation, samples_diff_bbsome_validation, samples_prediction_bbsome_validation)) %>% 
+      do.call(cbind, .) %>% cbind(lof_evaluation_validation, .) %>%
+  mutate(model_name = "Validation dataset", model_nice = model_name, Category = "V")
+
+evaluation_validation_processed <- evaluation_validation %>% 
+  gather("Conclusion","Result", -model_name, -model_nice, -Category) %>%
+  mutate(Conclusion = factor(Conclusion, levels = levels(freq_conclusions$Conclusion)))
+
+         
+
+```
+
+
+```{r}
+build_validation_conclusions_plot <- function(eval_conclusions, categories = TRUE) {
+
+  if(categories) {
+    facet <- facet_grid(.~Category, scales = "free_x", space = "free_x") 
+  } else {
+    facet <- NULL
+  }
+  
+  eval_conclusions %>% ggplot(aes(x = model_nice, y = Conclusion, fill = factor(Result))) + geom_tile() + 
+      theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5)) + 
+      scale_fill_manual("Validated", 
+                           values = c("0" = "#b2182b","0.5" = "#f7f7f7", "1" = "#2166ac", "NaN" = plots_na_color),
+                           #trans = "log10",
+                           breaks = c(0,0.5,1), labels = c("No","Mixed","Yes"),
+                           na.value = plots_na_color) +
+      scale_x_discrete("") +
+      guides(fill = guide_legend(reverse = TRUE)) +
+      facet + base_theme
+}
+
+validation_conclusions_plot <-  build_validation_conclusions_plot(evaluation_validation_processed)
+
+validation_conclusions_plot
+```
+
+Heatmap of evaluation on validation dataset, using exactly the same criteria as for the evaluation in Bayesian model, taking each source in the validation data as a single "sample". "Mixed" means that the relationship holds in one source in the validation but not the other. Claims that could be tested only in one source because the other had no data do not count as "Mixed". The claim on BBS5 could not be validated as there are no patients with BBS5 mutation in the validation dataset.
+
+Lets investigate the failures to validate. First, the claim that BBS4 is the most severe, which we would actually expect NOT to validate, as it is likely false according to our model, but the "BBS4 top odds" conclusion was validated. However, the BBS4 is only present in 5 patients "Elizabeth" source and although it has one of highest odds (taking all phenotypes together for simplicity), it is very similar to the odds for others, so this is comparable to noise level. Also the "among top 3 odds" clause we used is easier to satisfy when not all BBSome genes are present in the validation data:
+
+```{r}
+validation_data_long %>%
+  filter(gene %in% bbsome_genes) %>%
+  group_by(source) %>%
+  filter("BBS04" %in% gene) %>%
+  group_by(source,gene, ID) %>%
+  summarise(mean_pheno_1 = mean(phenotype_value), n_pheno = n()) %>%
+  group_by(source,gene) %>%
+  summarise(mean_pheno = mean(mean_pheno_1), n_patients = n()) %>%
+  arrange(source, desc(mean_pheno))
+```
+
+
 ```{r, fig.width= 9, fig.height=4.8}
-build_combined_conclusions_plot <- function(freq_conclusions_plot, conclusions_plot, rel_widths_plots, rel_widths_legend, rel_heights_legend) {
+build_combined_conclusions_plot <- function(freq_conclusions_plot, conclusions_plot, validation_plot, rel_widths_plots, rel_widths_legend, rel_heights_legend) {
   hide_guide_theme <- theme(legend.position = 'none')
   hide_y_axis_theme <- theme(axis.title.y = element_blank(), 
                              axis.text.y = element_blank(), 
@@ -459,17 +562,19 @@ build_combined_conclusions_plot <- function(freq_conclusions_plot, conclusions_p
   
   plot_grid(
     plot_grid(freq_conclusions_plot + hide_guide_theme + theme(plot.margin = margin(7,0,7,7, "pt")), 
-              conclusions_plot + hide_y_axis_theme + hide_guide_theme + theme(plot.margin = margin(7,7,7, 0, "pt")), 
-              align = "h",rel_widths = rel_widths_plots),
+              conclusions_plot + hide_y_axis_theme + hide_guide_theme + theme(plot.margin = margin(7,0,7, 0, "pt")), 
+              validation_plot + hide_y_axis_theme + hide_guide_theme + theme(plot.margin = margin(7,7,7, 0, "pt")), 
+              align = "h", nrow = 1, rel_widths = rel_widths_plots),
     plot_grid(
       cowplot::get_legend(freq_conclusions_plot), 
+      cowplot::get_legend(validation_plot),
       cowplot::get_legend(conclusions_plot),
       ncol = 1, nrow = 3, rel_heights = rel_heights_legend),
     rel_widths = rel_widths_legend
   )
 }
 
-combined_conclusions_plot <- build_combined_conclusions_plot(freq_conclusions_plot, conclusions_plot, rel_widths_plots = c(0.95, 1.1), rel_widths_legend = c(4,1), rel_heights_legend = c(1,1.9,0.5)) 
+combined_conclusions_plot <- build_combined_conclusions_plot(freq_conclusions_plot, conclusions_plot, validation_conclusions_plot, rel_widths_plots = c(1.0, 1.1,0.1), rel_widths_legend = c(4,1), rel_heights_legend = c(1,0.9,1.5)) 
 combined_conclusions_plot
 ```
 

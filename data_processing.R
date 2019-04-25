@@ -1,4 +1,4 @@
-
+bbsome_genes <- paste0("BBS0", c(1,2,4,5,7, 8,9))
 
 convert_uncertain_phenotype <- function(column) {
   result <- as.numeric(gsub("!","", column, fixed = TRUE))

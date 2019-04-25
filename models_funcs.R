@@ -118,7 +118,7 @@ get_samples_pairwise_diff <- function(model_def, samples_tidy) {
            "age" = c("age_std_for_model" = "age_std_for_model"),
            "sex" = c("sex" = "sex"),
            "ethnic_group" = c("ethnic_group" = "ethnic_group"),
-           "family" = c("family" = "family"), 
+           "family" = c("family_id" = "family_id"), 
            "source" = c("source" = "source")
     )
   }

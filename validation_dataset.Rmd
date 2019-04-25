@@ -236,12 +236,12 @@ plot_grid(prediction_egfr_plot, data_egfr_plot, nrow = 2, align = "v")
 ```{r}
 validation_data_long %>% 
   filter(phenotype == "REN", gene %in% genes_with_egfr, !is.na(eGFR)) %>%
-  group_by(loss_of_function, gene) %>% summarise(mean(eGFR))
+  group_by(gene) %>% summarise(mean_eGFR = mean(eGFR)) %>% arrange(desc(mean_eGFR))
 ```
 
 
 ```{r}
-data_for_prediction <- data_for_prediction_base_model(main_model_def, genes_to_show, phenotypes_to_show)
+data_for_prediction <- data_for_prediction_base_model(main_model_def, genes_to_show_from_data(validation_data), phenotypes_to_show)
 
 data_for_prediction_BBSome <- data_for_prediction %>% filter(functional_group_for_gene(gene) == "BBSome", gene != "BBS18")
 

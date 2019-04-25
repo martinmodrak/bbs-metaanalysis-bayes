@@ -13,7 +13,7 @@ genes_to_show_from_data <- function(data) {
 intercept_prior <- prior(normal(0,2), class = Intercept)
 b_prior <- prior(normal(0,2), class = b)
 sd_prior <- prior(normal(0,2), class = sd)
-family_sd_prior <- prior(normal(0,1), class = sd, coef = "family_id")
+family_sd_prior <- prior(normal(0,1), class = sd, group = "family_id")
 
 default_priors <- c(intercept_prior, sd_prior)
 
