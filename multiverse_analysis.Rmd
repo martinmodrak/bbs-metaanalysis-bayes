@@ -1,15 +1,15 @@
 ---
-title: "Appendix 3: Additional multiverse analysis of BBS phenotypes"
+title: "Appendix 4: Additional multiverse analysis of BBS phenotypes"
 abstract: 'This is an appendix for the paper "Exploring the function of the BBSome using clinical data: Meta-analysis of genotype-phenotype associations in Bardet-Biedl Syndrome". Here, we compute how the conclusions of the paper hold under multiple different models. Details of the models can be found in Appendix 4. The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes or Zenodo, DOI: 10.5281/zenodo.2536748'
 output:
   pdf_document: default
 ---
 
+In this part we show how conclusions we discuss in the main paper hold under different model choice and in the validation dataset. A wide variety of models was tested. Those are briefly described in the comparison. Their exact formulations can be found in Part 2. For a discussion of the validation dataset and the overall ability of the model to predict validation data, see Part 3.
 
 
 *Note: For historical reasons the feature of "certain loss of function" (cLOF) as discussed in the data is called just "lof" in most analysis code. This part will thus use "lof" and "cLOF" interchangeably.*
 
-A wide variety of models was tested. Those are briefly described in the comparison. Their exact formulations can be found in Part 2.   
 
 ```{r setup_multiverse, echo=FALSE, message = FALSE, warning=FALSE}
 knitr::opts_chunk$set(echo=FALSE, cache = TRUE)
@@ -535,22 +535,9 @@ validation_conclusions_plot <-  build_validation_conclusions_plot(evaluation_val
 validation_conclusions_plot
 ```
 
-Heatmap of evaluation on validation dataset, using exactly the same criteria as for the evaluation in Bayesian model, taking each source in the validation data as a single "sample". "Mixed" means that the relationship holds in one source in the validation but not the other. Claims that could be tested only in one source because the other had no data do not count as "Mixed". The claim on BBS5 could not be validated as there are no patients with BBS5 mutation in the validation dataset.
+Heatmap of evaluation on validation dataset, using exactly the same criteria as for the evaluation in Bayesian model, taking each source in the validation data as a single "sample". "Mixed" means that the relationship holds in one source in the validation data but not the other. Claims that could be tested only in one source because the other had no data on the mutations/phenotypes involved do not count as "Mixed". The claim on BBS5 could not be validated as there are no patients with BBS5 mutation in the validation dataset.
 
-Lets investigate the failures to validate. First, the claim that BBS4 is the most severe, which we would actually expect NOT to validate, as it is likely false according to our model, but the "BBS4 top odds" conclusion was validated. However, the BBS4 is only present in 5 patients "Elizabeth" source and although it has one of highest odds (taking all phenotypes together for simplicity), it is very similar to the odds for others, so this is comparable to noise level. Also the "among top 3 odds" clause we used is easier to satisfy when not all BBSome genes are present in the validation data:
-
-```{r}
-validation_data_long %>%
-  filter(gene %in% bbsome_genes) %>%
-  group_by(source) %>%
-  filter("BBS04" %in% gene) %>%
-  group_by(source,gene, ID) %>%
-  summarise(mean_pheno_1 = mean(phenotype_value), n_pheno = n()) %>%
-  group_by(source,gene) %>%
-  summarise(mean_pheno = mean(mean_pheno_1), n_patients = n()) %>%
-  arrange(source, desc(mean_pheno))
-```
-
+## Combining all results
 
 ```{r, fig.width= 9, fig.height=4.8}
 build_combined_conclusions_plot <- function(freq_conclusions_plot, conclusions_plot, validation_plot, rel_widths_plots, rel_widths_legend, rel_heights_legend) {
@@ -578,11 +565,32 @@ combined_conclusions_plot <- build_combined_conclusions_plot(freq_conclusions_pl
 combined_conclusions_plot
 ```
 
-This is a combined plot for both frequentist and Bayesian analzsis, once again shown mostly consistent results even when frequentist analyses are taken into account. The only big difference is that some of the HEART and LIV conclusions are not supported by most Bayesian analyses, or only those ignoring between-study variability.
+TODO: check accesibility for those with impaired color perception.
+
+This is a combined plot for both frequentist and Bayesian analysis, once again shown mostly consistent results even when frequentist analyses are taken into account. The only big difference is that some of the HEART and LIV conclusions are not supported by most Bayesian analyses, or only those ignoring between-study variability. The same conclusions also fail to hold in the validation dataset, indicating that between-study variability is indeed important.
+
+Note that the conclusions included here and their exact criteria were set before we had access to the validation dataset.
+
+Let's investigate the inconsistencies between validation data and the main model. First, the claim that BBS4 is the most severe, which we would actually expect NOT to validate, as it is likely false according to our model, but the "BBS4 top odds" conclusion was validated. However, the BBS4 is only present in 5 patients "Elizabeth" source and although it has one of highest odds (taking all phenotypes together for simplicity), it is very similar to the odds for others, so this is comparable to noise level. Also the "among top 3 odds" clause we used is easier to satisfy when not all BBSome genes are present in the validation data:
+
+```{r}
+validation_data_long %>%
+  filter(gene %in% bbsome_genes) %>%
+  group_by(source) %>%
+  filter("BBS04" %in% gene) %>%
+  group_by(source,gene, ID) %>%
+  summarise(mean_pheno_1 = mean(phenotype_value), n_pheno = n()) %>%
+  group_by(source,gene) %>%
+  summarise(mean_pheno = mean(mean_pheno_1), n_patients = n()) %>%
+  arrange(source, desc(mean_pheno)) %>% 
+  kable()
+```
+
+TODO: walkthrough other non-validated (once duplicates in validation data are checked).
 
 Finally a brief summary of the main analyses as shown in the main paper.
 
-```{r fig.width=7, fig.height=3.8}
+```{r fig.width=7.5, fig.height=3.8}
 hide_titles_theme <- theme(axis.title.x = element_blank())
 
 combined_conclusions_main_plot <- build_combined_conclusions_plot(
@@ -592,9 +600,10 @@ combined_conclusions_main_plot <- build_combined_conclusions_plot(
                         %>% mutate(model_nice = "Bayesian")
                         ,
                         categories = FALSE) + hide_titles_theme,
-  rel_widths_plots = c(9.2,1),
+                        build_validation_conclusions_plot(evaluation_validation_processed, categories = FALSE) + hide_titles_theme,
+  rel_widths_plots = c(14.1,1.1,1.5),
   rel_widths_legend = c(1,1),
-  rel_heights_legend = c(1,1.5,0.5)
+  rel_heights_legend = c(1,0.6,1.1)
 )
 
 combined_conclusions_main_plot

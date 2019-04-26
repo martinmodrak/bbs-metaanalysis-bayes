@@ -49,7 +49,7 @@ data %>%  select(-age_corr, -ID, -age_numbers, -age_numbers_groups_guessed, -age
 
 Note in particular, that both age and sex are missing in almost half of the records. Also, the data about individual phenotypes (all the numeric columns) is largely incomplete. Some minor clearing is required to use age, as it is stored as character (a combination of age ranges and ages). For some phenotypes we get values that are not 0 or 1 - those correspond to patients that were monitored in multiple studies, but the phenotype data was inconsistent between studies. In our analysis we treat those patients as exhibiting the phenotype.
 
-`loss_of_function` and `loss_of_function_certain` are different codings of the fact that the protein has certainly lost function (is truncated in both alleles). 
+`loss_of_function` and `loss_of_function_certain` are different encodings of the fact that the protein has certainly lost function (is truncated in both alleles). 
 
 For some analyses, we group the genes together according to *functional groups*, those are defined as folows:
 
@@ -129,7 +129,7 @@ There is large missingness in age and sex data as well. While our main analysis 
 
 ## The model - an accessible explanation
 
-As all models, the model we use simplifies and abstracts the medical reality in hope we can arrive at useful conclusions. Our model is a member of generalized linear model family, using logit link and hierarchial terms in a fully Bayesian treatment. Let's unpack this a little, starting with what a logit link does. In the following, we will describe how we handle a single phenotype as the estimation for individual phenotypes is mostly independent. 
+As all models, the model we use simplifies and abstracts the medical reality in hope we can arrive at useful conclusions. Our model is a member of generalized linear model family, using logit link and hierarchical terms in a fully Bayesian treatment. Let's unpack this a little, starting with what a logit link does. In the following, we will describe how we handle a single phenotype as the estimation for individual phenotypes is mostly independent. 
 
 Our model tries to estimate theoretical  *true prevalence* of the phenotype in a population - i.e. the probability that a randomly selected patient from the population will exhibit this phenotype. But all we observe is that each individual either exhibits the phenotype or not. Depending on the number of individuals enrolled in a study, the *observed prevalence* will jump more or less around this true prevalence - let's have a look at an example: 
 
@@ -210,7 +210,7 @@ Above on the leftmost panel we see that the two studies differ in the odds of th
 
 Another way to describe the allowed case is that, for both studies a mutation in Gene 2 makes a patient five times more likely to exhibit the phenotype than a patient with a mutation in Gene 1, although the base rate of the phenotype may vary between studies.
 
-The cLOF coefficient is held constant for all genes in a given phenotype, meaning that odds for any given phenotype are multiplied by a small number when the mutation is cLOF. Once again this means that relative odds are the same amongs cLOF and other mutations, but absolute odds can be higher (or lower) in cLOF mutations.
+The cLOF coefficient is held constant for all genes in a given phenotype, meaning that odds for any given phenotype are multiplied by a small number when the mutation is cLOF. Once again this means that relative odds are the same among cLOF and other mutations, but absolute odds can be higher (or lower) in cLOF mutations.
 
 This is the "linear" part of the model - we multiply odds, which is the same as adding the logarithm of the odds and addition is a neatly linear thing. 
 
@@ -226,7 +226,7 @@ Finally, the "Bayesian" part: We follow the Bayesian paradigm, so our estimates 
 
 ## The model - mathematical formulation
 
-We use a generalized linear model with logit link and hierarchial terms. Let us dive into the details.
+We use a generalized linear model with logit link and hierarchical terms. Let us dive into the details.
 For the model, we expand the data into long form, i.e. each row in the dataset corresponds to a combination of patient and reported phenotype (a patient with reported values for 3 phenotypes would correspond to 3 rows in the long form dataset). The model is specified with the following brms formula, using the Bernoulli family with logit link function:
 
 ```{r}
@@ -243,7 +243,7 @@ Y_i &\sim Bernoulli(\mu_i) \\
 \end{aligned}
 $$
 
-Where $p_i \in \{1, ..., P \}$ is the index of the phenotype for $i$-th row, $g_i \in \{1,...,G\}$ is mutated gene for $i$-th row and $s_i \in \{1,...,S\}$ is the index of the source study for $i$-th row. $c_i$ is 1 when the mutation on the $i$-th row is cLOF and 0 otherwise.  $\alpha$ is the intercept and $\beta^1, \beta^2$ and $\beta^3$ model the overall phenotype prevalence,  phenotype prevalance specific to a given mutation and between-study variability in phenotype prevalence respectively. $\beta^4$ models the phenotype-specific effect of cLOF.
+Where $p_i \in \{1, ..., P \}$ is the index of the phenotype for $i$-th row, $g_i \in \{1,...,G\}$ is mutated gene for $i$-th row and $s_i \in \{1,...,S\}$ is the index of the source study for $i$-th row. $c_i$ is 1 when the mutation on the $i$-th row is cLOF and 0 otherwise.  $\alpha$ is the intercept and $\beta^1, \beta^2$ and $\beta^3$ model the overall phenotype prevalence,  phenotype prevalence specific to a given mutation and between-study variability in phenotype prevalence respectively. $\beta^4$ models the phenotype-specific effect of cLOF.
 
 Note that this is very similar to running a separate regression for each phenotype, with two exceptions: the overall intercept $\alpha$ is explicitly shared between phenotypes and the structure of the priors introduces some information flow between the other coefficients.
 
@@ -434,7 +434,7 @@ for(type in types) {
 
 ## Discrepancies between frequentist and Bayesian analysis
 
-Here we try to understand why the frequentist and Bayesian analyses provided different results for some of the questions we asked. In all cases the answer is that there is substantial between-study variability, which, when taken into account, prevents us from making firm conclusions about some of the comparisons that are significant in the frequentist analysis (which ingores between-study variability).
+Here we try to understand why the frequentist and Bayesian analyses provided different results for some of the questions we asked. In all cases the answer is that there is substantial between-study variability, which, when taken into account, prevents us from making firm conclusions about some of the comparisons that are significant in the frequentist analysis (which ignores between-study variability).
 
 ### CI phenotype and BBS7
 
@@ -470,7 +470,7 @@ plot_diff_average_to_single_gene(data_long, "CI", "BBS07", bbs_genes_to_check)
 
 ```
 
-Here, each dot is a study with size indicating the number of cases. We show the prevalence for BBS7 and prevalence across the other mutations. Lines connect estimates from the same study. This shows us that while BBS7 indeed has high CI prevalence (the prevalance is 100% in most studies), there are some studies where the CI prevalance is lower than prevalence in other mutations:
+Here, each dot is a study with size indicating the number of cases. We show the prevalence for BBS7 and prevalence across the other mutations. Lines connect estimates from the same study. This shows us that while BBS7 indeed has high CI prevalence (the prevalence is 100% in most studies), there are some studies where the CI prevalence is lower than prevalence in other mutations:
 
 ```{r}
 data_long %>% filter(phenotype == "CI") %>% group_by(source) %>%

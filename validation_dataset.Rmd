@@ -5,7 +5,13 @@ output:
      toc: true
 ---
 
-```{r setup_main, echo=FALSE, message = FALSE, warning=FALSE}
+As requested by one of the reviewers, we managed to get additional data to test how well do the predictions of the main model we chose hold in previously unseen data. In this part we briefly go through the validation dataset and show how the overall predictions of the model hold in it. The validity of specific conclusions made in the main paper is investigated in Part 4 alongside the multiverse analysis.
+
+Note that we gained access to the validation dataset only after the first revision of the manuscript and the main model (as described in Part 1) was chosen and developed without any knowledge of the validation data. No changes to the main model were made after the first revision and only minor error corrections were performed in the data we used to fit it. In this sense the data should be a relatively strong independent test of the model.
+
+The summary of this section is that the model has some ability to predict the new data, but the predictions are relatively weak, because they are highly uncertain and often do not have much confidence even for the sign of an effect, let alone its magnitude.
+
+```{r setup_validation, echo=FALSE, message = FALSE, warning=FALSE}
 knitr::opts_chunk$set(echo=FALSE)
 library(rstan)
 library(brms)
@@ -26,15 +32,27 @@ source(here("data_processing.R"))
 source(here("models.R"))
 source(here("models_funcs.R"))
 source(here("plots.R"))
-
+set.seed(84266523)
 ```
 
+## Validation data
+
+A brief summary of the data follows:
 
 ```{r}
 validation_data <- read_validation_data()
 skim_with(numeric = list(hist = NULL, sd = NULL, p0 = NULL, p25 = NULL, p50 = NULL, p75 = NULL, p100 = NULL, n_unique = n_unique), character = list(empty = NULL), factor = list(top_counts = NULL, ordered = NULL))
 validation_data %>%  select(-ID, -age,-family_id) %>% skim() 
 ```
+
+Several notable things are:
+
+* The dataset is reasonably large at almost 1/4 of the original data.
+* The dataset represents two distinct source of data (TODO: explain)
+* eGFR which is a continuous measure of renal function was reported for half of the patients, letting us test the model not only against presence/absence of a phenotype but also against the degree of phenotype severity.
+
+_Note: the validation dataset had some patients with low eGFR but not diagnosed with renal dysfunction and some patients with eGFR reported but renal phenotype not reported. In the following, all patients with eGFR < 60 are treated as exhibiting the renal phenotype. Patients with high eGFR but no data on renal phenotype are excluded._
+
 
 ```{r}
 stored_fit_file <- paste0(here(stored_fits_dir,main_model_def$name), ".rds")
@@ -49,10 +67,14 @@ fit <- readRDS(stored_fit_file)
 validation_data_long <- data_long_from_data(validation_data)
 validation_samples <- get_tidy_samples(fit, validation_data_long)
 validation_samples_prediction <- get_tidy_samples_prediction(fit, validation_data_long)
+source1 <- levels(validation_data$source)[2]
+source2 <- levels(validation_data$source)[1]
 ```
 
 
+## Predictions for genes, phenotypes and LOF
 
+Since our model includes between-study variability (and we've seen it is very high), direct predictions of prevalence for a new study are very fuzzy. We can however make predictions about the relative prevalence of various phenotypes within a single source/study. This relative prevalence will be our focus. We will therefore let the model do probabilistic predictions of the observed relative prevalence of all reported phenotypes for all patients in the validation data and compare those with actual relative prevalence.
 
 ```{r}
 observed_diffs <- validation_data_long %>%   
@@ -76,7 +98,7 @@ plot_predicted_vs_observed <- function(observed_diffs, predicted_diffs, ...) {
     filter(...) 
   
   predicted_diffs %>%
-    group_by(phenotype, gene, loss_of_function_certain, functional_group) %>%
+    group_by(source, phenotype, gene, loss_of_function_certain, functional_group) %>%
     summarise(Estimate = median(prevalence_diff), 
                 lower = quantile(prevalence_diff, posterior_interval_bounds[1]),
                 upper = quantile(prevalence_diff, posterior_interval_bounds[2]),
@@ -84,26 +106,48 @@ plot_predicted_vs_observed <- function(observed_diffs, predicted_diffs, ...) {
                 upper50 = quantile(prevalence_diff, 0.75)
       ) %>% ungroup() %>%
     filter(...) %>%
+    mutate(gene_source = paste0(gene,"_", source)) %>%
     ggplot(aes(x = gene, y = Estimate, ymin = lower, ymax = upper, color = functional_group)) + 
     geom_hline(yintercept = 0, color = "darkred")+ 
     geom_linerange(aes(ymin = lower50, ymax = upper50), size = 2) +
     geom_linerange() +
-    geom_point(aes(x = gene, y = prevalence_diff, size = n_cases, shape = source), data = observed_diffs, inherit.aes = FALSE, alpha = 0.8, position = position_nudge(x = 0.3))  +
-    facet_wrap(~phenotype, scales = "free_y", ncol = 3) +
-    scale_size_continuous(range = c(1.5,4)) +
+    geom_point(aes(x = gene, y = prevalence_diff, size = n_cases), data = observed_diffs %>% mutate(gene_source = paste0(gene,"_", source)), inherit.aes = FALSE, alpha = 0.8, position = position_nudge(x = 0.3))  +
+    facet_wrap(phenotype~source, ncol = 3) +
+    scale_size_continuous("No. of cases", range = c(1.5,4)) +
     scale_color_functional_group +
+    scale_y_continuous("Difference to overall prevalence") +
     theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5)) +
     base_theme
 }
 ```
 
+Since the model includes LOF information, we further split the predictions for certain LOF (cLOF) and other mutations and by source. Let's start with the cLOF mutations in the `r source1` data:
 
 ```{r, fig.width=10, fig.height=7}
-plot_predicted_vs_observed(observed_diffs, predicted_diffs, loss_of_function_certain == 1)
-plot_predicted_vs_observed(observed_diffs, predicted_diffs, loss_of_function_certain == 0)
- 
+plot_predicted_vs_observed(observed_diffs, predicted_diffs, loss_of_function_certain == 1, source == source1)
 ```
 
+Here we see the posterior 95% (thin) and 50% (thick) credible intervals of observed difference of prevalence between patients with a given cLOF mutation and the overall prevalence. Unlike the summary plots in Part 1, here we work with actual observed presence/absence data and the model predictions are made for each patient - this means that when only a few patients with the given mutation are reported, there will be larger uncertainty in the predictions simply because there is more sampling variance in those few patients. The dots display the observed prevalence difference, the size of the dots indicates the number of reported patients with the mutation.
+
+Overall, the predictions are quite wide (and in this sense underwhelming) and even the sign of the difference is never predicted with high confidence, but the predicted intervals tend to include the observed values. We will try to quantify this later. For now, let's look at the same plot, but for the `r source2` dataset:
+
+```{r, fig.width=10, fig.height=4.7}
+plot_predicted_vs_observed(observed_diffs, predicted_diffs, loss_of_function_certain == 1, source == source2)
+```
+
+And also at how mutations with uncertain LOF are predicted for both of the sources:
+
+```{r, fig.width=10, fig.height=7}
+plot_predicted_vs_observed(observed_diffs, predicted_diffs, loss_of_function_certain == 0, source == source1)
+```
+
+```{r, fig.width=10, fig.height=4.7}
+plot_predicted_vs_observed(observed_diffs, predicted_diffs, loss_of_function_certain == 0, source == source2)
+```
+
+The trend here is similar to the first plot - wide predictions, uncertain signs. Probably the only remarkable pattern is the lack of difference in prevalence in the RD and OBE phenotypes, which is consistent with the model, but not largely surprising due to overall high prevalence of both phenotypes.
+
+## Prediction trend
 
 ```{r}
 set.seed(543248822)
@@ -111,6 +155,8 @@ data_calibration <- observed_diffs %>% inner_join(predicted_diffs, by = c("sourc
   group_by(source, phenotype, gene, loss_of_function_certain) %>%
   summarise(n_less = sum(prevalence_diff.predicted < prevalence_diff.observed),
             n_equal = sum(prevalence_diff.predicted == prevalence_diff.observed),
+            n_cases = mean(n_cases.observed), #should all be equal
+            n_cases_sd = sd(n_cases.observed), #just to check
             mean_predicted = mean(prevalence_diff.predicted),
             lower_predicted = quantile(prevalence_diff.predicted, posterior_interval_bounds[1]),
               upper_predicted = quantile(prevalence_diff.predicted, posterior_interval_bounds[2]),
@@ -126,6 +172,35 @@ if(any(data_calibration$sd_observed > 0)) {
   stop("Problem")
 }
 
+if(any(data_calibration$n_cases_sd > 0)) {
+  stop("Problem")
+}
+```
+
+We've seen that observed values tend to be within what the model predicts, but it is hard to see any general trend from the above plots. The model makes `r nrow(data_calibration)` predictions (one for each combination of source, phenotype, gene and cLOF although not all combinations are present). So lets look at the trend among them:
+
+
+```{r}
+data_calibration %>% ggplot(aes(x = observed, y = mean_predicted, weight = n_cases))  +
+  geom_abline(slope = 1, intercept = 0, color = "orange", size = 2, linetype = "dashed") +
+  geom_point(aes(size = n_cases), alpha = 0.5) +
+  geom_smooth(method = "lm", color = "darkred", fill = "darkred") +
+  base_theme
+
+  #geom_point(alpha = 0.5) 
+  
+```
+
+Here, each dot is a single prediction, the horizontal axis is the observed difference in prevalence and the vertical axis is mean of the differences predicted by the model. Point size corresponds to the number of patients that represent each prediction. The dashed orange line represents perfect prediction (the mean is equal to what was observed). The red line shows a fitted linear trend  across all predictions, weighed by number of patients. The shaded red region is 95% confidence interval for the trend.
+
+Overall we see that predictions for larger subgroups are closer to the ideal prediction line than those for small groups and that the predictions indeed contain some information (the fitted trend is positive), but not much (the correlation is `r round(cor(data_calibration$observed, data_calibration$mean_predicted), 2)`).
+
+## Calibration
+
+Another important property of the predictions is whether they are *calibrated*. If the predictions are calibrated, the posterior quantiles of actual values are uniformly distributed (i.e. 50% of actual values lie above their predicted median, 25% of actual values fall into each posterior quartile, 10% into each posterior decile etc.). 
+
+```{r}
+
 plot_calibration <- function(data_calibration, predicted_diffs, n_bins) {
   n_samples <- length(unique(predicted_diffs$sample))
   CI = qbinom(c(0.005,0.5,0.995), size=nrow(data_calibration),prob  =  1 / n_bins)
@@ -139,52 +214,80 @@ plot_calibration <- function(data_calibration, predicted_diffs, n_bins) {
     geom_segment(aes(x=0,y=mean,xend=n_samples,yend=mean),colour="grey25") +
     geom_polygon(data=data.frame(x=c(-0.1*n_samples,0,-0.1*n_samples,1.1*n_samples,n_samples,1.1 * n_samples,-0.1*n_samples),y=c(lower,mean,upper,upper,mean,lower,lower)),aes(x=x,y=y),fill="grey45",color="grey25",alpha=0.5) +
     geom_histogram(breaks = breaks, closed = "left" ,fill="#A25050",colour="black") +
+    scale_y_continuous("No. of predictions") +
+    scale_x_continuous("No. of samples <= observed value") +
     base_theme
 }
+n_bins = c(3, 13, 34)
 ```
 
-```{r}
-nrow(data_calibration)
-plot_calibration(data_calibration, predicted_diffs, n_bins = 3)
-plot_calibration(data_calibration, predicted_diffs, n_bins = 13)
-plot_calibration(data_calibration, predicted_diffs, n_bins = 34)
+The way this works is that we split the predictions into $N$ bins, where prediction is in the $k$-th bin if at least $(k-1)/N$ and at most $k/N$ posterior samples predict a lower value. If $N$ divides the number of predictions, each bin should contain the same number of predictions in expectation (but actual counts may differ due to sampling variability).
+This is similar in spirit to the [Simulation Based Calibration](https://arxiv.org/abs/1804.06788) method.
+
+Since we have `r nrow(data_calibration)` predictions we start by using $N =`r n_bins[1]`$:
+
+```{r fig.width = 4, fig.height = 2}
+plot_calibration(data_calibration, predicted_diffs, n_bins = n_bins[1])
 ```
 
-```{r}
-data_calibration %>% ggplot(aes(x = observed, y = mean_predicted))  +
-  geom_abline(slope = 1, intercept = 0, color = "blue") +
-  geom_point() +
-  geom_smooth(method = "lm") +
-  base_theme
+Here the bars represent the number of predictions in each bin and the gray area shows 99% confidence interval assuming the proportions be exactly equal. The notch and horizontal line indicating exact equality. Using $N =`r n_bins[1]`$ has the advantage of having quite a lot of predictions within each bin and so the confidence interval is relatively narrow allowing us to discern smaller deviations from perfect calibration. On the other hand, the bins are wide and if for example the actual values that fall in the very tails are slightly overrepresented, we might not notice as this difference would be diminished by mixing with the rest of the bin.
 
-  #geom_point(alpha = 0.5) 
-  
+So let us trade sensitivity for more detail and use $N = `r n_bins[2]`$ (as it divides the number of predictions).
+
+```{r fig.width = 4, fig.height = 2}
+plot_calibration(data_calibration, predicted_diffs, n_bins = n_bins[2])
 ```
 
+Now the confidence interval is wider, but we see that even at finer scales the distribution is reasonably uniform. As one final step we can use $N = `r n_bins[3]`$ (once again almost exacatly divides the number of predictions):
 
-eGFR vs. predikovane REN
+```{r fig.width = 4, fig.height = 2}
+plot_calibration(data_calibration, predicted_diffs, n_bins = n_bins[3])
+```
+
+The sampling variability increases, but there still isn't a cause for concern as the deviations from uniform are within what is to be expected (note that even one bar slightly outside the confidence interval wouldn't be that surprising, since the confidence interval should contain the true value in 99% of the cases and among the 3 plots we have made `r sum(n_bins)` tests - a probability of one miss is far from negligible.
+
+## Predictions for REN with respect to eGFR
+
+Since eGFR is a continuous measure of renal function (the higher the better), we would expect probability of renal dysfunction (as classified according to the data gathering protocol) to increase with lower eGFR. For this analysis we also include patients who don't have data on REN phenotype but have eGFR reported.
+
+
 
 ```{r}
-genes_with_egfr <- validation_data_long %>% filter(phenotype == "REN", !is.na(eGFR)) %>%
+validation_data_egfr <- validation_data %>% 
+  mutate(REN = if_else(is.na(REN) & !is.na(eGFR), 0, REN)) #I don't care about phenotype value, but need to include the patients in the data
+
+validation_data_egfr_long <- data_long_from_data(validation_data_egfr) 
+
+genes_with_egfr <- validation_data_egfr_long %>% filter(phenotype == "REN", !is.na(eGFR)) %>%
   group_by(gene) %>%
   summarise(n = n()) %>% 
   filter(n > 2) %>%
   pull(gene)
 
-#For some reason I need predictions with all phenotypes
-data_for_predictions_egfr <- data_for_prediction_base_model(main_model_def, unique(validation_data$gene), phenotypes_to_show, loss_of_function_certain = c(0,1))
+#For some reason I need predictions with all phenotypes or brms errors
+data_for_predictions_egfr <- data_for_prediction_base_model(main_model_def, unique(validation_data_egfr$gene), phenotypes_to_show, loss_of_function_certain = c(0,1))
 
 predictions_egfr <- get_tidy_samples(fit, data_for_predictions_egfr) %>% filter(phenotype == "REN")
 
+sources_with_egfr <- validation_data_egfr %>% filter(!is.na(eGFR)) %>% pull(source) %>% unique()
+if(length(sources_with_egfr) > 1) {
+  stop("Multiple sources with eGFR")
+}
 ```
+
+We will focus on mutations where at least two patients have reported eGFR, leaving us with `r length(genes_with_egfr)` mutations. Note that since only the `r sources_with_egfr` data have eGFR we don't need to care about between-study variability. Lets inspect the predictions:
 
 
 ```{r}
+transform_lof <- function(lof) {
+  factor(as.character(lof), levels = c("certain","unknown"), labels = c("LOF: certain", "LOF: unknown"))
+}
+
 
 egfr_plot_data <- predictions_egfr %>% 
-  #group_by(sample, loss_of_function) %>%
   group_by(sample) %>%
-  mutate(mean_value = mean(value), relative = odds / (mean_value / (1 - mean_value) )) %>% 
+  mutate(mean_value = mean(value), relative = odds / (mean_value / (1 - mean_value) ),
+         loss_of_function = transform_lof(loss_of_function)) %>% 
   #group_by(loss_of_function, gene, functional_group) %>%
   group_by(gene, functional_group) %>%
   summarise(Estimate = median(relative), 
@@ -197,19 +300,21 @@ egfr_plot_data <- predictions_egfr %>%
 
 gene_order <- egfr_plot_data %>% group_by(gene) %>% summarise(Estimate = mean(Estimate)) %>% arrange(Estimate) %>% pull(gene)
 
+
 prediction_egfr_plot <- egfr_plot_data %>%
   mutate(gene = factor(gene, levels = gene_order)) %>%
   ggplot(aes(x = gene, y = Estimate, ymin = lower, ymax = upper, color = functional_group)) + 
   geom_hline(yintercept = 1, color = "darkred")+ 
   geom_linerange(aes(ymin = lower50, ymax = upper50), size = 2) +
   geom_linerange() +
+  scale_y_log10("Predicted odds ratio") +
   #facet_wrap(~loss_of_function) +
   scale_color_functional_group +
   base_theme
 
-data_egfr_plot <- validation_data_long %>% 
+data_egfr_plot <- validation_data_egfr_long %>% 
   filter(phenotype == "REN", gene %in% genes_with_egfr, !is.na(eGFR)) %>%
-  mutate(gene = factor(gene, levels = gene_order)) %>%
+  mutate(gene = factor(gene, levels = gene_order), loss_of_function = transform_lof(loss_of_function)) %>%
   ggplot(aes(x = gene, y = eGFR, color = functional_group)) +
     geom_jitter(alpha = 0.5, width = 0.2, height = 0) +
     geom_boxplot(fill = "transparent", outlier.shape = NA) +
@@ -218,39 +323,19 @@ data_egfr_plot <- validation_data_long %>%
     base_theme
            
 plot_grid(prediction_egfr_plot, data_egfr_plot, nrow = 2, align = "v")
-#samples_to_use <- sample(unique(validation_samples$sample), 100)
-# validation_samples %>% 
-#   filter(phenotype == "REN") %>%
-#   group_by(source, sample, loss_of_function) %>%
-#   #mutate(relative = odds / exp(mean(log(odds)))) %>% 
-#   mutate(relative = value - mean(value)) %>%
-#   ungroup() %>%
-#   filter(sample %in% samples_to_use, !is.na(eGFR)) %>%
-#   ggplot(aes(x = eGFR, y = relative)) + geom_jitter(alpha = 0.1) +
-#   #scale_y_log10() +
-#   facet_wrap(~loss_of_function) +
-#   geom_smooth(method = "lm")
 ```
 
+In the top panel, we see the predicted 95% (thin) and 50% (thick) credible intervals for odds ratio of renal phenotype given the mutation against overall odds of the phenotype. The bottom panel shows the observed eGFR for patients with the mutation. Each dot is a single patient, the boxplots represent the median +/- interquartile range, whiskers extend to 1.5 * interquartile range. The genes are ordered by mean predicted odds ratio.
+
+As in the overall predictions a mild correlation is visible - as the predicted odds ratio increases, the distribution of eGFR goes down. But the results are somewhat underwhelming. The display is similar when we separate cLOF and other mutations, but gets more erratic as there are very few cLOF mutations in the data.
+
+We can also see that the mean eGFR mildly decreases when ordered according to the predicted phenotype odds ratio:
 
 ```{r}
 validation_data_long %>% 
   filter(phenotype == "REN", gene %in% genes_with_egfr, !is.na(eGFR)) %>%
-  group_by(gene) %>% summarise(mean_eGFR = mean(eGFR)) %>% arrange(desc(mean_eGFR))
+  group_by(gene) %>% summarise(mean_eGFR = mean(eGFR)) %>% arrange(desc(mean_eGFR)) %>%
+  kable()
 ```
 
 
-```{r}
-data_for_prediction <- data_for_prediction_base_model(main_model_def, genes_to_show_from_data(validation_data), phenotypes_to_show)
-
-data_for_prediction_BBSome <- data_for_prediction %>% filter(functional_group_for_gene(gene) == "BBSome", gene != "BBS18")
-
-```
-
-
-```{r}
-validation_fit <- fit_base_model(main_model_def, validation_data_long)
-```
-
-
-Konkretni tvrzeni pak ocheckovat v multiverse_analysis s nafitovaným modelem
