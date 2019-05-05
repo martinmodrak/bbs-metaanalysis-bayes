@@ -31,8 +31,6 @@ source(here("models.R"))
 source(here("models_funcs.R"))
 source(here("plots.R"))
 
-##PP Checks take time, so turn this off for quicker computation of the rest
-compute_pp_checks <- TRUE
 ```
 
 ```{r}

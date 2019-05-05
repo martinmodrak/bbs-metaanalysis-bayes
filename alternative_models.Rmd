@@ -26,8 +26,6 @@ source(here("models.R"))
 source(here("models_funcs.R"))
 source(here("plots.R"))
 
-##PP Checks take time, so turn this off for quicker computation of the rest
-compute_pp_checks <- TRUE
 ```
 
 *Note: For historical reasons the feature of "certain loss of function" (cLOF) as discussed in the data is called just "lof" in most analysis code. This part will thus use "lof" and "cLOF" interchangeably.*
@@ -131,7 +129,6 @@ Modeling between-study variability is simply a good practice for any meta-analys
 ```{r}
 pp_check_helper <- function(model_names, pp_check_types) {
   
-  if(compute_pp_checks) {
     for(name in model_names) {
       run_pp_checks(all_models[[name]], all_fits[[name]], data_long, types = pp_check_types, out_func = function(x) {
         base_theme_font_size = 7
@@ -146,7 +143,6 @@ pp_check_helper <- function(model_names, pp_check_types) {
         print(x + base_theme)
         })  
     }
-  }
 } 
 ```
 
