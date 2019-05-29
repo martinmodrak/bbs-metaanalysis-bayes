@@ -1,20 +1,20 @@
-Conclusion,p-value-all,p-value-cLOF,order
-cLOF mutations more severe,1.30E-03,NA,1
-BBS3 less severe than BBSome,3.26E-04,1.85E-01,2
-BBS3 less severe than Chaperonins,6.56E-06,1.43E-01,3
-BBSome genes differ,4.67E-06,2.95E-03,6
-BBS4 top odds,1.00E+00,NA,4
-BBS4 most #phenotypes,1.00E+00,NA,5
-REN: BBSome genes differ,1.76E-07,6.18E-05,11
-PD: BBS2 more frequent than BBS1,7.02E-07,5.33E-04,7
-CI: BBSome more frequent than BBS3,3.64E-10,6.90E-03,9
-CI: BBS7 more frequent than others,4.74E-03,1.00E+00,10
-"REN: BBS2,7,9 more frequent than BBS1,4,8",5.20E-10,1.61E-06,12
-REN: BBS2 more frequent than BBS1,8.99E-07,1.04E-03,13
-REN: BBS10 more frequent than BBS1,3.27E-04,8.95E-02,14
-LIV: BBS2 more frequent than BBS1,1.01E-02,3.45E-01,16
-LIV: BBS10 more frequent than BBS1,1.51E-01,1.48E-01,17
-HEART: BBS2 more frequent than others,1.25E-04,7.34E-04,15
-LIV: BBS5 more frequent than others,3.08E-04,2.67E-05,18
-LIV: others more frequent than BBS4,9.46E-03,5.40E-02,19
-PD: BBS10 more frequent than BBS1,7.43E-05,2.63E-02,8
+Conclusion,p-value-all,p-value-cLOF,order,include_in_main
+cLOF mutations more severe,1.30E-03,NA,1,TRUE
+BBS3 less severe than BBSome,3.26E-04,1.85E-01,2,TRUE
+BBS3 less severe than Chaperonins,6.56E-06,1.43E-01,3,TRUE
+BBSome genes differ,4.67E-06,2.95E-03,6,TRUE
+BBS4 top odds,1.00E+00,NA,4,TRUE
+BBS4 most #phenotypes,1.00E+00,NA,5,TRUE
+REN: BBSome genes differ,1.76E-07,6.18E-05,11,TRUE
+PD: BBS2 more frequent than BBS1,7.02E-07,5.33E-04,7,TRUE
+CI: BBSome more frequent than BBS3,3.64E-10,6.90E-03,9,TRUE
+CI: BBS7 more frequent than others,4.74E-03,1.00E+00,10,TRUE
+"REN: BBS2,7,9 more frequent than BBS1,4,8",5.20E-10,1.61E-06,12,TRUE
+REN: BBS2 more frequent than BBS1,8.99E-07,1.04E-03,13,TRUE
+REN: BBS10 more frequent than BBS1,3.27E-04,8.95E-02,14,TRUE
+LIV: BBS2 more frequent than BBS1,1.01E-02,3.45E-01,16,FALSE
+LIV: BBS10 more frequent than BBS1,1.51E-01,1.48E-01,17,FALSE
+HEART: BBS2 more frequent than others,1.25E-04,7.34E-04,15,FALSE
+LIV: BBS5 more frequent than others,3.08E-04,2.67E-05,18,FALSE
+LIV: others more frequent than BBS4,9.46E-03,5.40E-02,19,FALSE
+PD: BBS10 more frequent than BBS1,7.43E-05,2.63E-02,8,TRUE

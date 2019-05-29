@@ -414,9 +414,9 @@ if(!dir.exists(img_path)) {
 types = c(".pdf")
 
 for(type in types) {
-  differences_func_group_plot %>% ggsave(paste0("functional_groups", type), plot = ., path = img_path,height = std_height, width = 5)
+  differences_func_group_plot %>% ggsave(paste0("functional_groups", type), plot = ., path = img_path,height = std_height, width = 4.2)
   
-  differences_bbsome_plot %>% ggsave(paste0("bbsome_overall", type), plot = ., path = img_path,height = std_height, width = 10)
+  differences_bbsome_plot %>% ggsave(paste0("bbsome_overall", type), plot = ., path = img_path,height = std_height, width = 8)
   
   differences_chaperonins_plot %>% ggsave(paste0("chaperonins_overall", type), plot = ., path = img_path,height = std_height, width = std_width)
   

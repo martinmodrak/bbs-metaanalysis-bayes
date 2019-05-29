@@ -25,6 +25,21 @@ age_transform_from_age <- function(age) {
   }
 }
 
+phenotype_long_map <- c(RD = "Retinal distrophy",
+                     OBE = "Obesity",
+                     PD = "Polydactyly",
+                     CI = "Cognitive impairment",
+                     REP = "Reproductive system",
+                     REN = "Renal anomalies",
+                     HEART = "Heart anomalies",
+                     LIV = "Liver anomalies",
+                     DD = "Developmental delay")
+  
+
+phenotype_long_from_phenotype <- function(phenotype) {
+  factor(phenotype_long_map[as.character(phenotype)], levels = phenotype_long_map[phenotypes_to_use])
+}
+
 read_data_base <- function(filename, sheet, ...) {
   read_excel(filename, sheet = sheet) %>%
     rename(case_no = "source case n.", 
@@ -65,7 +80,7 @@ read_data_base <- function(filename, sheet, ...) {
 
 read_main_data <- function() {
   
-    data <- read_data_base(here("data","UPDATE5 SuppInfo Table S3 dataset.xlsx"), sheet = "List1") %>%  
+    data <- read_data_base(here("data","UPDATE8 SuppInfo Table S3 dataset-obn.xlsx"), sheet = "List1") %>%  
     
     #Get age categories
     mutate(age_corr = if_else(age == "5 month", as.character(5/12), gsub(",",".", age)),
@@ -134,6 +149,7 @@ data_long_from_data  <- function(data) {
     filter(phenotype %in% phenotypes_to_use) %>%
     filter(!is.na(phenotype_value)) %>%
     mutate(phenotype_value = as.integer(if_else(phenotype_value == 0, 0 , 1)),
+           phenotype_long = phenotype_long_from_phenotype(phenotype),
            phenotype = factor(phenotype, levels = phenotypes_to_use)
            )
   

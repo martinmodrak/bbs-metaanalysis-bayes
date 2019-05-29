@@ -311,7 +311,8 @@ freq_conclusions <- readr::read_csv(here("data","BBS - Frequentist conclusions -
   Conclusion = col_character(),
   `p-value-all` = col_double(),
   `p-value-cLOF` = col_double(),
-  order = col_integer()
+  order = col_integer(),
+  include_in_main = col_logical()
 ))
 
 
@@ -354,7 +355,7 @@ evaluation_processed <- evaluation %>%
          Conclusion = factor(Conclusion, levels = levels(freq_conclusions$Conclusion)),
          Category = case_when(model_name %in% c("gene_source", "gene_source_lof", "gene_source_filtered_lof") ~ "Main",
                               model_name %in% c("gene_only", "gene_lof", "gene_lof_per_gene", "gene_only_filtered_lof", "gene_source_very_narrow", "gene_imputed_age_sex") ~ "Bad fits", 
-                              TRUE ~ "Secondary") %>% factor(levels = c("Main","Secondary","Bad fits")))
+                              TRUE ~ "Secondary") %>% factor(levels = c("Main","Secondary","Bad fits"))) 
 
 plots_na_color <- "#606060"
 
@@ -545,14 +546,22 @@ build_combined_conclusions_plot <- function(freq_conclusions_plot, conclusions_p
                              axis.line.y = element_blank(),
                              axis.ticks.y = element_blank())
   
+  if(!is.null(validation_plot)) {
+    validation_plot_processed <- validation_plot + hide_y_axis_theme + hide_guide_theme + theme(plot.margin = margin(7,7,7, 0, "pt"))
+    validation_legend <- cowplot::get_legend(validation_plot)
+  } else {
+    validation_plot_processed <- NULL
+    validation_legend <- NULL
+  }
+  
   plot_grid(
     plot_grid(freq_conclusions_plot + hide_guide_theme + theme(plot.margin = margin(7,0,7,7, "pt")), 
               conclusions_plot + hide_y_axis_theme + hide_guide_theme + theme(plot.margin = margin(7,0,7, 0, "pt")), 
-              validation_plot + hide_y_axis_theme + hide_guide_theme + theme(plot.margin = margin(7,7,7, 0, "pt")), 
+              validation_plot_processed, 
               align = "h", nrow = 1, rel_widths = rel_widths_plots),
     plot_grid(
       cowplot::get_legend(freq_conclusions_plot), 
-      cowplot::get_legend(validation_plot),
+      validation_legend,
       cowplot::get_legend(conclusions_plot),
       ncol = 1, nrow = 3, rel_heights = rel_heights_legend),
     rel_widths = rel_widths_legend
@@ -588,20 +597,39 @@ TODO: walkthrough other non-validated (once duplicates in validation data are ch
 
 Finally a brief summary of the main analyses as shown in the main paper.
 
-```{r fig.width=7.5, fig.height=3.8}
+
+```{r fig.width=7, fig.height=2.8}
+validation_in_main = TRUE
+
 hide_titles_theme <- theme(axis.title.x = element_blank())
 
+evaluation_for_main <- evaluation_processed %>% filter(model_name == "gene_source_lof") %>% mutate(model_nice = "Bayesian") %>%
+  inner_join(freq_conclusions %>% select(Conclusion, include_in_main), by = c("Conclusion" = "Conclusion")) %>% filter(include_in_main)
+
+if(validation_in_main) {
+  evaluation_validation_for_main  <- evaluation_validation_processed %>% 
+    inner_join(freq_conclusions %>% select(Conclusion, include_in_main), by = c("Conclusion" = "Conclusion")) %>% filter(include_in_main)
+  
+  validation_plot_main <- build_validation_conclusions_plot(evaluation_validation_for_main, categories = FALSE) + hide_titles_theme
+  
+  rel_widths_plots <-  c(14.1,1.1,1.5)
+  rel_heights_legend <-  c(1,0.6,1.1)
+  
+} else {
+  validation_plot_main <- NULL
+  rel_widths_plots <-  c(12,1.0,0.2)
+  rel_heights_legend <-  c(1,0.01,1.1)
+}
+
 combined_conclusions_main_plot <- build_combined_conclusions_plot(
-  build_freq_conclusions_plot(freq_conclusions %>% filter(model_nice == "frequentist all") %>% mutate(model_nice = "frequentist")
+  build_freq_conclusions_plot(freq_conclusions %>% filter(model_nice == "frequentist all", include_in_main) %>% mutate(model_nice = "frequentist")
                               , categories = FALSE) + hide_titles_theme,
-  build_conclusion_plot(evaluation_processed %>% filter(model_name == "gene_source_lof") 
-                        %>% mutate(model_nice = "Bayesian")
-                        ,
+  build_conclusion_plot(evaluation_for_main,
                         categories = FALSE) + hide_titles_theme,
-                        build_validation_conclusions_plot(evaluation_validation_processed, categories = FALSE) + hide_titles_theme,
-  rel_widths_plots = c(14.1,1.1,1.5),
+  validation_plot_main,
+  rel_widths_plots = rel_widths_plots,
   rel_widths_legend = c(1,1),
-  rel_heights_legend = c(1,0.6,1.1)
+  rel_heights_legend = rel_heights_legend
 )
 
 combined_conclusions_main_plot
@@ -610,6 +638,6 @@ combined_conclusions_main_plot
 
 ```{r}
 combined_conclusions_plot %>% ggsave(here("tmp_pics","conclusions.pdf"), ., width = 9, height = 4.8)
-combined_conclusions_main_plot %>% ggsave(here("tmp_pics","conclusions_main.pdf"), ., width = 7, height = 3.8)
+combined_conclusions_main_plot %>% ggsave(here("tmp_pics","conclusions_main.pdf"), ., width = 7, height = 2.8)
 ```
 

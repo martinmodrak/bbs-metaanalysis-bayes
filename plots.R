@@ -2,7 +2,7 @@ posterior_interval <- 0.95
 posterior_interval_bounds <- c(0.5 * (1 - posterior_interval), 1 - (0.5 * (1 - posterior_interval)))
 
 
-base_theme_font_size = 9 + 1/3
+base_theme_font_size = (9 + 1/3) * 1.4
 base_theme <- theme( 
                     axis.title = element_text(size = base_theme_font_size), 
                     axis.text = element_text(size = base_theme_font_size), 
@@ -220,8 +220,10 @@ plot_gene_phenotype_differences_estimates <- function(
               upper = quantile(relative, posterior_interval_bounds[2]),
               lower50 = quantile(relative, 0.25),
               upper50 = quantile(relative, 0.75)
-    )
+    ) %>%
+    mutate(phenotype_long = phenotype_long_from_phenotype(phenotype))
 
+  
 
   if(is.null(data_original)) {
     original_geom = NULL 
@@ -268,7 +270,8 @@ plot_gene_phenotype_differences_estimates <- function(
       inner_join(phenotype_limits_intervals, by = c("phenotype" = "phenotype")) %>%
       mutate(min_or = pmin(min_or_intervals, min_or_points), 
              max_or = pmax(max_or_intervals, max_or_points),
-             limits_ratio = max_or / min_or
+             limits_ratio = max_or / min_or,
+             phenotype_long = phenotype_long_from_phenotype(phenotype)
              )
     
     data_to_plot_original_imputed <- data_to_plot_original %>%
@@ -311,10 +314,12 @@ plot_gene_phenotype_differences_estimates <- function(
     size_50 = 3
     size_95 = 1.5
     size_range = c(1,4)
+    facet <- facet_wrap(~phenotype_long, scales = "free_y", ncol = 3)
   } else {
     size_50 = 2
     size_95 = 1
     size_range = c(0.5,3)
+    facet <- facet_wrap(~phenotype, scales = "free_y", ncol = 3)
   }
     
   data_to_plot %>% ggplot(aes(x = group, y = Estimate, ymin = lower, ymax = upper, color = functional_group)) +
@@ -323,7 +328,7 @@ plot_gene_phenotype_differences_estimates <- function(
     original_geom +
     geom_linerange(aes(ymin = lower50, ymax = upper50), size = size_50) +
     geom_linerange() +
-    facet_wrap(~phenotype, scales = "free_y", ncol = 3)  + 
+    facet +
     scale_color_functional_group +
     scale_y_log10("Odds ratio", labels = simple_num_format) +
     scale_x_discrete(group_title, labels = bbs_labeller) +
