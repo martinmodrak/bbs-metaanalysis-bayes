@@ -47,7 +47,7 @@ data_long <- data_long_from_data(data)
 
 ### Base models
 
-Base models are those that work with (a subset of) the original dataset, without any imputation. The models are defined in file `models.R`. They differ in the model formula, subsets of the dataset they use and priors for model coefficients. The syntax for formulas in `brms` is described (in brms manual)[https://rdrr.io/cran/brms/man/brmsformula.html] and will not be explained here. The model may work on filtered dataset - `lof` means filtered for only the mutations with certain LOF, `family`, `age`,`sex` and `age_sex` corresponds to filtering for patients with reported family, age, sex or both age and sex. The list of base models follows:
+Base models are those that work with (a subset of) the original dataset, without any imputation. The models are defined in file `models.R`. They differ in the model formula, subsets of the dataset they use and priors for model coefficients. The syntax for formulas in `brms` is described [in `brms` manual](https://rdrr.io/cran/brms/man/brmsformula.html) and will not be explained here. The model may work on filtered dataset - `lof` means filtered for only the mutations with certain LOF, `family`, `age`,`sex` and `age_sex` corresponds to filtering for patients with reported family, age, sex or both age and sex. Likewise `ethnic_group` and `family` filter only the data that has those values reported. The list of base models follows:
 
 ```{r}
 models_base %>% walk(function(def) {
@@ -117,7 +117,7 @@ all_fits <- c(fits_base, fits_imputed)
 
 ## Choosing the model for main analysis
 
-In general we use *posterior predictive checks* (PPCheck) to asses model fit. PPCheck is performed by predicting posterior distribution of possible outcomes implied by the fitted model. This distribution can then be compared to what is actually observed in the data and discrepancies can be noted and used to guide model expansion/selection. In our case, we focus on the prevalence of positive phenotypes across various subdivisions of the data. Of prime interests are subdivisions *not* taken into account by a model - if the model explains groupings that were not included, it is a sign that it works well. If the model consistently misestimates groups it is not aware of, it is an indication that such a group should be involved. We use the `bayesplot` package to perform PPChecks. See (Gabry et al. 2018, Visualisation in Bayesian workflow)[https://arxiv.org/abs/1709.01449] for a more thorough discussion of PPChecks.
+In general we use *posterior predictive checks* (PPCheck) to asses model fit. PPCheck is performed by predicting posterior distribution of possible outcomes implied by the fitted model. This distribution can then be compared to what is actually observed in the data and discrepancies can be noted and used to guide model expansion/selection. In our case, we focus on the prevalence of positive phenotypes across various subdivisions of the data. Of prime interests are subdivisions *not* taken into account by a model - if the model explains groupings that were not included, it is a sign that it works well. If the model consistently misestimates groups it is not aware of, it is an indication that such a group should be involved. We use the `bayesplot` package to perform PPChecks. See [Gabry et al. 2018, *Visualisation in Bayesian workflow*](https://arxiv.org/abs/1709.01449) for a more thorough discussion of PPChecks.
 
 In most models, we assume phenotype correlations because the data were selected for containing at least two phenotypes and diagnosis criteria is based on having multiple phenotypes. Both of these processes could have introduced correlations. However, the fitted correlations are not conclusive and do not increase the explanatory power of the model (models with different correlation structures are also included).
 
@@ -226,7 +226,7 @@ pp_check_helper("gene_lof", c("phenotype_lof","gene_lof"))
 pp_check_helper("gene_lof_per_gene", c("phenotype_lof","gene_lof"))
 ```
 
-While adding source as a covariate ameliorates the problems with cLOF (it remains problematic only for REN and LIV phenotypes)
+Adding source as a covariate ameliorates the problems with cLOF (it remains problematic only for REN and LIV phenotypes):
 
 ```{r, fig.height=3}
 pp_check_helper("gene_source", c("phenotype_lof","gene_lof"))

@@ -490,7 +490,10 @@ plot_pairwise_differences <- function(model_def, fit, data_for_prediction,
   #                              axis.title = element_blank(), 
   #                              legend.title = element_text(size = 11,angle = 270, vjust = 0.2),
   #                              legend.text = element_text(size = 8))
+  
+  
   theme_linerange_all <- theme(axis.title = element_blank(), 
+                               axis.text=element_text(size=8),
                                legend.title = element_text(angle = 270, vjust = 0.2))
   
   if("linerange_all" == plot_type) {

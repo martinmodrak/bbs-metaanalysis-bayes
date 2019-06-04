@@ -1,15 +1,9 @@
 ---
-title: "Appendix 4: Additional multiverse analysis of BBS phenotypes"
-abstract: 'This is an appendix for the paper "Exploring the function of the BBSome using clinical data: Meta-analysis of genotype-phenotype associations in Bardet-Biedl Syndrome". Here, we compute how the conclusions of the paper hold under multiple different models. Details of the models can be found in Appendix 4. The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes or Zenodo, DOI: 10.5281/zenodo.2536748'
+title: "Appendix: Additional multiverse analysis of BBS phenotypes"
+abstract: 'This is an appendix for the paper "Exploring the function of the BBSome using clinical data: Meta-analysis of genotype-phenotype associations in Bardet-Biedl Syndrome". Here, we compute how the conclusions of the paper hold under multiple different models. The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes or Zenodo, DOI: 10.5281/zenodo.2536748'
 output:
   pdf_document: default
 ---
-
-In this part we show how conclusions we discuss in the main paper hold under different model choice and in the validation dataset. A wide variety of models was tested. Those are briefly described in the comparison. Their exact formulations can be found in Part 2. For a discussion of the validation dataset and the overall ability of the model to predict validation data, see Part 3.
-
-
-*Note: For historical reasons the feature of "certain loss of function" (cLOF) as discussed in the data is called just "lof" in most analysis code. This part will thus use "lof" and "cLOF" interchangeably.*
-
 
 ```{r setup_multiverse, echo=FALSE, message = FALSE, warning=FALSE}
 knitr::opts_chunk$set(echo=FALSE, cache = TRUE)
@@ -31,7 +25,16 @@ source(here("models.R"))
 source(here("models_funcs.R"))
 source(here("plots.R"))
 
+include_validation = FALSE
 ```
+
+In this part we show how conclusions we discuss in the main paper hold under different model choice`r if(include_validation){" and in the validation dataset" }`. A wide variety of models was tested. Those are briefly described in the comparison. Their exact formulations can be found in Part 2. `r if(include_validation){ "For a discussion of the validation dataset and the overall ability of the model to predict validation data, see Part 3." }`
+
+
+*Note: For historical reasons the feature of "certain loss of function" (cLOF) as discussed in the data is called just "lof" in most analysis code. This part will thus use "lof" and "cLOF" interchangeably.*
+
+
+
 
 ```{r}
 data <- read_main_data()
@@ -273,10 +276,9 @@ evaluators[["LIV_BBS1_BBS10"]] <- evaluator_prob_pairwise_diff("LIV","BBS10","BB
 ## Bayesian Comparison
 
 ```{r compute_evaluation}
-models_for_test <- all_models[c("gene_source_lof","gene_source_filtered_lof","gene_imputed_age_sex")]
-
-evaluation <- all_models %>% 
+#models_for_test <- all_models[c("gene_source_lof","gene_source_filtered_lof","gene_imputed_age_sex")]
 #evaluation <- models_for_test %>%
+evaluation <- all_models %>% 
  map_df(function(def) {
     fit <- all_fits[[def$name]]
     data_for_prediction <- data_for_prediction_base_model(def, genes_to_show, phenotypes_to_show, age_transform = age_transform_from_age(data$age_numbers_groups_guessed))
@@ -306,7 +308,7 @@ evaluation <- all_models %>%
 
 
 ```{r load_freqentist}
-#Freq. conclusions contain order
+#Freq. conclusions contain order 
 freq_conclusions <- readr::read_csv(here("data","BBS - Frequentist conclusions - p.csv"), col_types = cols(
   Conclusion = col_character(),
   `p-value-all` = col_double(),
@@ -324,7 +326,7 @@ freq_conclusions <- freq_conclusions %>%
 ```
 
 
-```{r, fig.width = 8, fig.height = 4.8}
+```{r, fig.width = 10, fig.height = 6.5}
 nice_model_name <- function(x)  {
   x %>% gsub("only","none", .) %>% 
     gsub("lof_per_gene","cLOF (by gene)", .) %>% 
@@ -410,7 +412,7 @@ Some patterns to notice:
 
 ## Frequentist results 
 
-```{r}
+```{r, fig.width=5.7, fig.height=5.1}
 build_freq_conclusions_plot <- function(freq_conclusions, categories = TRUE) {
 
   significance_pos <- 1 - (log10(0.05) / log10(min(freq_conclusions$p, na.rm = TRUE)))
@@ -442,103 +444,112 @@ freq_conclusions_plot
 
 Heatmap of p-values from frequentist analysis for the same conclusions (exact computations described in the main body of the paper).
 
-## Validation dataset
+`r if(include_validation) {"## Validation dataset"}`
 
 
 ```{r evaluation_validation}
-validation_data <- read_validation_data()
-validation_data_long <- data_long_from_data(validation_data)
+if(include_validation) {
+  validation_data <- read_validation_data()
+  validation_data_long <- data_long_from_data(validation_data)
+  
+  #Turn validation data into "samples" that the evaluators can manage
+  samples_validation <- validation_data_long %>%
+    group_by(source, phenotype, loss_of_function_certain, gene, functional_group) %>%
+    summarise(value = mean(phenotype_value)) %>%
+    ungroup() %>%
+    mutate(sample = source, odds = value / (1 - value)) 
+  
+  
+  samples_diff_validation <- get_samples_pairwise_diff(main_model_def, samples_validation) %>%
+    mutate(odds_ratio = if_else(odds.x == odds.y, 1, odds_ratio)) %>% 
+    mutate(is_relevant = odds_ratio >= min_interesting_effect | odds_ratio <= 1 /min_interesting_effect)
+  
+  if(any(is.na(samples_diff_validation$odds_ratio))) {
+    stop("Problem")
+  }
+  
+  
+  samples_diff_bbsome_validation <- samples_diff_validation %>% 
+    filter(gene.x %in% bbsome_genes, gene.y %in% bbsome_genes)
+  
+  samples_prediction_bbsome_validation <- validation_data_long %>%
+    filter(gene %in% bbsome_genes) %>%
+    mutate(value = phenotype_value, sample = source)
+  
+  
+  samples_lof_diff_validation <- samples_validation %>%
+    filter(loss_of_function_certain == 1) %>%
+      inner_join(samples_validation %>% filter(loss_of_function_certain == 0), 
+                 by = c("phenotype" = "phenotype", "gene" = "gene", "source",
+                        "functional_group" = "functional_group")) %>%
+      mutate(odds_ratio = odds.x / odds.y) %>%
+      mutate(odds_ratio = if_else(odds.x == odds.y, 1, odds_ratio)) 
+  
+  if(any(is.na(samples_lof_diff_validation$odds_ratio))) {
+    stop("Problem")
+  }
+  
+  
+  
+  #Note: this slightly differs from lof evaluation for model as I need to renormalize to have the same retio of genes/phenotypes required to be different. I also take equal odds of 0/Inf as odds_ratio > 1, i.e. equal odds are counted as negative evidence only when
+  lof_evaluation_validation <-  samples_lof_diff_validation %>% 
+       group_by(source, phenotype) %>% summarise(enough_genes = mean(odds_ratio > 1 | (odds_ratio == 1 & (odds.x == 0 | odds.x == Inf))) >= n_genes_lof_different / length(bbsome_genes)) %>%
+       group_by(source) %>% summarise(enough_phenotypes = mean(enough_genes) >= min_phenotypes_for_diffs / 9) %>%
+       ungroup() %>% summarise(`cLOF mutations more severe` = mean(enough_phenotypes))
+   
+  #Apply the evaluators
+  evaluation_validation <- evaluators %>% map( ~ .x(samples_diff_validation, samples_diff_bbsome_validation, samples_prediction_bbsome_validation)) %>% 
+        do.call(cbind, .) %>% cbind(lof_evaluation_validation, .) %>%
+    mutate(model_name = "Validation dataset", model_nice = model_name, Category = "V")
+  
+  evaluation_validation_processed <- evaluation_validation %>% 
+    gather("Conclusion","Result", -model_name, -model_nice, -Category) %>%
+    mutate(Conclusion = factor(Conclusion, levels = levels(freq_conclusions$Conclusion)))
 
-#Turn validation data into "samples" that the evaluators can manage
-samples_validation <- validation_data_long %>%
-  group_by(source, phenotype, loss_of_function_certain, gene, functional_group) %>%
-  summarise(value = mean(phenotype_value)) %>%
-  ungroup() %>%
-  mutate(sample = source, odds = value / (1 - value)) 
-
-
-samples_diff_validation <- get_samples_pairwise_diff(main_model_def, samples_validation) %>%
-  mutate(odds_ratio = if_else(odds.x == odds.y, 1, odds_ratio)) %>% 
-  mutate(is_relevant = odds_ratio >= min_interesting_effect | odds_ratio <= 1 /min_interesting_effect)
-
-if(any(is.na(samples_diff_validation$odds_ratio))) {
-  stop("Problem")
-}
-
-
-samples_diff_bbsome_validation <- samples_diff_validation %>% 
-  filter(gene.x %in% bbsome_genes, gene.y %in% bbsome_genes)
-
-samples_prediction_bbsome_validation <- validation_data_long %>%
-  filter(gene %in% bbsome_genes) %>%
-  mutate(value = phenotype_value, sample = source)
-
-
-samples_lof_diff_validation <- samples_validation %>%
-  filter(loss_of_function_certain == 1) %>%
-    inner_join(samples_validation %>% filter(loss_of_function_certain == 0), 
-               by = c("phenotype" = "phenotype", "gene" = "gene", "source",
-                      "functional_group" = "functional_group")) %>%
-    mutate(odds_ratio = odds.x / odds.y) %>%
-    mutate(odds_ratio = if_else(odds.x == odds.y, 1, odds_ratio)) 
-
-if(any(is.na(samples_lof_diff_validation$odds_ratio))) {
-  stop("Problem")
-}
-
-
-
-#Note: this slightly differs from lof evaluation for model as I need to renormalize to have the same retio of genes/phenotypes required to be different. I also take equal odds of 0/Inf as odds_ratio > 1, i.e. equal odds are counted as negative evidence only when
-lof_evaluation_validation <-  samples_lof_diff_validation %>% 
-     group_by(source, phenotype) %>% summarise(enough_genes = mean(odds_ratio > 1 | (odds_ratio == 1 & (odds.x == 0 | odds.x == Inf))) >= n_genes_lof_different / length(bbsome_genes)) %>%
-     group_by(source) %>% summarise(enough_phenotypes = mean(enough_genes) >= min_phenotypes_for_diffs / 9) %>%
-     ungroup() %>% summarise(`cLOF mutations more severe` = mean(enough_phenotypes))
- 
-#Apply the evaluators
-evaluation_validation <- evaluators %>% map( ~ .x(samples_diff_validation, samples_diff_bbsome_validation, samples_prediction_bbsome_validation)) %>% 
-      do.call(cbind, .) %>% cbind(lof_evaluation_validation, .) %>%
-  mutate(model_name = "Validation dataset", model_nice = model_name, Category = "V")
-
-evaluation_validation_processed <- evaluation_validation %>% 
-  gather("Conclusion","Result", -model_name, -model_nice, -Category) %>%
-  mutate(Conclusion = factor(Conclusion, levels = levels(freq_conclusions$Conclusion)))
-
-         
+}         
 
 ```
 
 
 ```{r}
-build_validation_conclusions_plot <- function(eval_conclusions, categories = TRUE) {
 
-  if(categories) {
-    facet <- facet_grid(.~Category, scales = "free_x", space = "free_x") 
-  } else {
-    facet <- NULL
+if(include_validation) {
+  build_validation_conclusions_plot <- function(eval_conclusions, categories = TRUE) {
+  
+    if(categories) {
+      facet <- facet_grid(.~Category, scales = "free_x", space = "free_x") 
+    } else {
+      facet <- NULL
+    }
+    
+    eval_conclusions %>% ggplot(aes(x = model_nice, y = Conclusion, fill = factor(Result))) + geom_tile() + 
+        theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5)) + 
+        scale_fill_manual("Validated", 
+                             values = c("0" = "#b2182b","0.5" = "#f7f7f7", "1" = "#2166ac", "NaN" = plots_na_color),
+                             #trans = "log10",
+                             breaks = c(0,0.5,1), labels = c("No","Mixed","Yes"),
+                             na.value = plots_na_color) +
+        scale_x_discrete("") +
+        guides(fill = guide_legend(reverse = TRUE)) +
+        facet + base_theme
   }
   
-  eval_conclusions %>% ggplot(aes(x = model_nice, y = Conclusion, fill = factor(Result))) + geom_tile() + 
-      theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5)) + 
-      scale_fill_manual("Validated", 
-                           values = c("0" = "#b2182b","0.5" = "#f7f7f7", "1" = "#2166ac", "NaN" = plots_na_color),
-                           #trans = "log10",
-                           breaks = c(0,0.5,1), labels = c("No","Mixed","Yes"),
-                           na.value = plots_na_color) +
-      scale_x_discrete("") +
-      guides(fill = guide_legend(reverse = TRUE)) +
-      facet + base_theme
+  validation_conclusions_plot <-  build_validation_conclusions_plot(evaluation_validation_processed)
+  
+  print(validation_conclusions_plot)
+} else {
+  validation_conclusions_plot <- NULL
 }
-
-validation_conclusions_plot <-  build_validation_conclusions_plot(evaluation_validation_processed)
-
-validation_conclusions_plot
 ```
 
-Heatmap of evaluation on validation dataset, using exactly the same criteria as for the evaluation in Bayesian model, taking each source in the validation data as a single "sample". "Mixed" means that the relationship holds in one source in the validation data but not the other. Claims that could be tested only in one source because the other had no data on the mutations/phenotypes involved do not count as "Mixed". The claim on BBS5 could not be validated as there are no patients with BBS5 mutation in the validation dataset.
+`r if(include_validation) { '
+Heatmap of evaluation on validation dataset, using exactly the same criteria as for the evaluation in Bayesian model, taking each source in the validation data as a single "sample". "Mixed" means that the relationship holds in one source in the validation data but not the other. Claims that could be tested only in one source because the other had no data on the mutations/phenotypes involved do not count as "Mixed". The claim on BBS5 could not be validated as there are no patients with BBS5 mutation in the validation dataset. '} `
 
 ## Combining all results
 
-```{r, fig.width= 9, fig.height=4.8}
+```{r, fig.width= 11, fig.height=7}
+
+
 build_combined_conclusions_plot <- function(freq_conclusions_plot, conclusions_plot, validation_plot, rel_widths_plots, rel_widths_legend, rel_heights_legend) {
   hide_guide_theme <- theme(legend.position = 'none')
   hide_y_axis_theme <- theme(axis.title.y = element_blank(), 
@@ -568,19 +579,60 @@ build_combined_conclusions_plot <- function(freq_conclusions_plot, conclusions_p
   )
 }
 
-combined_conclusions_plot <- build_combined_conclusions_plot(freq_conclusions_plot, conclusions_plot, validation_conclusions_plot, rel_widths_plots = c(1.0, 1.1,0.1), rel_widths_legend = c(4,1), rel_heights_legend = c(1,0.9,1.5)) 
-combined_conclusions_plot
+evaluation_for_main <- evaluation_processed %>% 
+  inner_join(freq_conclusions %>% select(Conclusion, include_in_main), by = c("Conclusion" = "Conclusion")) %>% filter(include_in_main)
+
+freq_conclusions_for_main <- freq_conclusions %>% filter(include_in_main)
+
+if(include_validation) {
+  rel_widths_plots <- c(1.0, 1.1,0.1)
+  rel_widths_legend <-  c(4,1)
+  rel_heights_legend <-  c(1,0.9,1.5)
+  
+  evaluation_validation_for_main  <- evaluation_validation_processed %>% 
+    inner_join(freq_conclusions %>% select(Conclusion, include_in_main), by = c("Conclusion" = "Conclusion")) %>% filter(include_in_main)
+  
+} else {
+  rel_widths_plots <- c(0.98, 1.1, 0.01)
+  rel_widths_legend <-  c(7,1)
+  rel_heights_legend <-  c(1.0,0.01,1.1)
+}
+
+build_combined_conclusions_plot(freq_conclusions_plot, conclusions_plot, validation_conclusions_plot, rel_widths_plots = rel_widths_plots, rel_widths_legend = rel_widths_legend, rel_heights_legend = rel_heights_legend) 
+
+#TODO: check accesibility for those with impaired color perception.
 ```
 
-TODO: check accesibility for those with impaired color perception.
+```{r, fig.width= 11, fig.height=6}
+#Version with filtered conclusions for main paper
+if(include_validation) {
+  validation_plot <- build_validation_conclusions_plot(evaluation_validation_for_main)
+} else {
+  validation_plot <- NULL
+}
 
-This is a combined plot for both frequentist and Bayesian analysis, once again shown mostly consistent results even when frequentist analyses are taken into account. The only big difference is that some of the HEART and LIV conclusions are not supported by most Bayesian analyses, or only those ignoring between-study variability. The same conclusions also fail to hold in the validation dataset, indicating that between-study variability is indeed important.
+combined_conclusions_plot <- build_combined_conclusions_plot(
+  build_freq_conclusions_plot(freq_conclusions_for_main), 
+  build_conclusion_plot(evaluation_for_main),
+  validation_plot, 
+  rel_widths_plots = rel_widths_plots, 
+  rel_widths_legend = rel_widths_legend, 
+  rel_heights_legend = rel_heights_legend) 
 
+
+combined_conclusions_plot %>% ggsave(here("tmp_pics","conclusions.pdf"), ., width = 11, height = 6)
+```
+
+
+This is a combined plot for both frequentist and Bayesian analysis, once again showing mostly consistent results even when frequentist analyses are taken into account. The only big difference is that some of the HEART and LIV conclusions are not supported by most Bayesian analyses, or only those ignoring between-study variability. `r if(include_validation) { "The same conclusions also fail to hold in the validation dataset, indicating that between-study variability is indeed important."} `
+
+`r if(include_validation) { '
 Note that the conclusions included here and their exact criteria were set before we had access to the validation dataset.
 
-Let's investigate the inconsistencies between validation data and the main model. First, the claim that BBS4 is the most severe, which we would actually expect NOT to validate, as it is likely false according to our model, but the "BBS4 top odds" conclusion was validated. However, the BBS4 is only present in 5 patients "Elizabeth" source and although it has one of highest odds (taking all phenotypes together for simplicity), it is very similar to the odds for others, so this is comparable to noise level. Also the "among top 3 odds" clause we used is easier to satisfy when not all BBSome genes are present in the validation data:
+Let\'s investigate the inconsistencies between validation data and the main model. First, the claim that BBS4 is the most severe, which we would actually expect NOT to validate, as it is likely false according to our model, but the "BBS4 top odds" conclusion was validated. However, the BBS4 is only present in 5 patients "Elizabeth" source and although it has one of highest odds (taking all phenotypes together for simplicity), it is very similar to the odds for others, so this is comparable to noise level. Also the "among top 3 odds" clause we used is easier to satisfy when not all BBSome genes are present in the validation data: ' }`
 
 ```{r}
+if(include_validation) {
 validation_data_long %>%
   filter(gene %in% bbsome_genes) %>%
   group_by(source) %>%
@@ -591,25 +643,19 @@ validation_data_long %>%
   summarise(mean_pheno = mean(mean_pheno_1), n_patients = n()) %>%
   arrange(source, desc(mean_pheno)) %>% 
   kable()
+}
 ```
-
-TODO: walkthrough other non-validated (once duplicates in validation data are checked).
 
 Finally a brief summary of the main analyses as shown in the main paper.
 
-
-```{r fig.width=7, fig.height=2.8}
-validation_in_main = TRUE
+```{r fig.width=6.25, fig.height=3.5}
+validation_in_main = include_validation
 
 hide_titles_theme <- theme(axis.title.x = element_blank())
 
-evaluation_for_main <- evaluation_processed %>% filter(model_name == "gene_source_lof") %>% mutate(model_nice = "Bayesian") %>%
-  inner_join(freq_conclusions %>% select(Conclusion, include_in_main), by = c("Conclusion" = "Conclusion")) %>% filter(include_in_main)
 
 if(validation_in_main) {
-  evaluation_validation_for_main  <- evaluation_validation_processed %>% 
-    inner_join(freq_conclusions %>% select(Conclusion, include_in_main), by = c("Conclusion" = "Conclusion")) %>% filter(include_in_main)
-  
+
   validation_plot_main <- build_validation_conclusions_plot(evaluation_validation_for_main, categories = FALSE) + hide_titles_theme
   
   rel_widths_plots <-  c(14.1,1.1,1.5)
@@ -617,27 +663,24 @@ if(validation_in_main) {
   
 } else {
   validation_plot_main <- NULL
-  rel_widths_plots <-  c(12,1.0,0.2)
+  rel_widths_plots <-  c(13.1,1.0,0.2)
   rel_heights_legend <-  c(1,0.01,1.1)
 }
 
 combined_conclusions_main_plot <- build_combined_conclusions_plot(
-  build_freq_conclusions_plot(freq_conclusions %>% filter(model_nice == "frequentist all", include_in_main) %>% mutate(model_nice = "frequentist")
+  build_freq_conclusions_plot(freq_conclusions_for_main %>% filter(model_nice == "frequentist all") %>% mutate(model_nice = "frequentist")
                               , categories = FALSE) + hide_titles_theme,
-  build_conclusion_plot(evaluation_for_main,
+  build_conclusion_plot(evaluation_for_main %>% filter(model_name == "gene_source_lof") %>% mutate(model_nice = "Bayesian"),
                         categories = FALSE) + hide_titles_theme,
   validation_plot_main,
   rel_widths_plots = rel_widths_plots,
-  rel_widths_legend = c(1,1),
+  rel_widths_legend = c(3.2,1),
   rel_heights_legend = rel_heights_legend
 )
 
 combined_conclusions_main_plot
+
+combined_conclusions_main_plot %>% ggsave(here("tmp_pics","conclusions_main.pdf"), ., width = 6.25, height = 3.5)
 ```
 
-
-```{r}
-combined_conclusions_plot %>% ggsave(here("tmp_pics","conclusions.pdf"), ., width = 9, height = 4.8)
-combined_conclusions_main_plot %>% ggsave(here("tmp_pics","conclusions_main.pdf"), ., width = 7, height = 2.8)
-```
 

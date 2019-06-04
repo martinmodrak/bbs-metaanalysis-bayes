@@ -8,11 +8,12 @@ output:
 
 ***
 
-This document consists of three parts: 
+This document consists of four parts: 
 
 * Part 1 describes the Bayesian analysis reported in the main manuscript.
 * Part 2 describes all Bayesian models we tried throughout this project and discusses the reasoning behind our choice of model for the main analysis, in particular why between-study variability is crucial and taking into account complete loss of function (cLOF) useful while age, and sex can be omitted.
-* Part 3 shows how the conclusions of the paper hold under multiple different models.
+* Part 3 discusses the overall ability of the model to predict a validation dataset
+* Part 4 shows how the conclusions of the paper hold under multiple different models and in the validation data.
 
 The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes or Zenodo, DOI: 10.5281/zenodo.2545609
 
@@ -36,7 +37,14 @@ knitr::opts_chunk$set(echo=FALSE, cache = TRUE, cache.lazy = FALSE)
 
 \newpage
 
-# Part 3: Conclusions under Multiverse Analysis and Validation
+# Part 3: Validation on a new dataset
+
+```{r child_validation, child = 'validation_dataset.Rmd'}
+```
+
+\newpage
+
+# Part 4: Conclusions under Multiverse Analysis and Validation
 
 ```{r child_multiverse, child = 'multiverse_analysis.Rmd'}
 ```

@@ -33,7 +33,8 @@ if(!dir.exists(here(stored_fits_dir))) {
   dir.create(here(stored_fits_dir))
 }
 
-
+include_validation <-  FALSE
+multiverse_part <- if(include_validation) { "Part 4" } else {"Part 3"}
 ```
 
 
@@ -44,12 +45,12 @@ First let us examine some of the properties of the data se we are working with -
 ```{r}
 data <- read_main_data()
 skim_with(numeric = list(hist = NULL, sd = NULL, p0 = NULL, p25 = NULL, p50 = NULL, p75 = NULL, p100 = NULL, n_unique = n_unique), character = list(empty = NULL), factor = list(top_counts = NULL, ordered = NULL))
-data %>%  select(-age_corr, -ID, -age_numbers, -age_numbers_groups_guessed, -age_std_for_model) %>% skim() 
+data %>%  select(-age_corr, -ID, -age_numbers, -age_numbers_groups_guessed, -age_std_for_model, -loss_of_function_certain) %>% skim() 
 ```
 
 Note in particular, that both age and sex are missing in almost half of the records. Also, the data about individual phenotypes (all the numeric columns) is largely incomplete. Some minor clearing is required to use age, as it is stored as character (a combination of age ranges and ages). For some phenotypes we get values that are not 0 or 1 - those correspond to patients that were monitored in multiple studies, but the phenotype data was inconsistent between studies. In our analysis we treat those patients as exhibiting the phenotype.
 
-`loss_of_function` and `loss_of_function_certain` are different encodings of the fact that the protein has certainly lost function (is truncated in both alleles). 
+`loss_of_function` encodes the fact that the protein has certainly lost function (is truncated in both alleles). 
 
 For some analyses, we group the genes together according to *functional groups*, those are defined as folows:
 
@@ -73,7 +74,7 @@ data_long <- data_long_from_data(data)
 The phenotypes present in the data are:
 
 ```{r}
-phenotypes_to_use
+paste0(phenotype_long_from_phenotype(phenotypes_to_use)," (", phenotypes_to_use,")")
 ```
 
 
@@ -94,7 +95,7 @@ data_long %>%
   theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5))
 ```
 
-Here, every point represents the proportion of patients with a given mutation that manifested a given phenotype in one study. The point size represents the number of patients with the mutation in the study. We see that even studies with a relatively large number of patients show very different proportions. We are therefore confident that allowing for between-study heterogeneity is important for analyzing the data correctly. In the attached multiverse analysis, we also attempted to model the studies as homogenous and found it to be a bad fit.
+Here, every point represents the proportion of patients with a given mutation that manifested a given phenotype in one study. The point size represents the number of patients with the mutation in the study. We see that even studies with a relatively large number of patients show very different proportions. We are therefore confident that allowing for between-study heterogeneity is important for analyzing the data correctly. In Part 2, we also show an attempt to model the studies as homogenous and find it to be a bad fit, although most of the qualitative conclusions are supported in both models, as described in `r multiverse_part`.
 
 ## Handling missingness
 
@@ -125,9 +126,11 @@ data_long %>%
 
 In the figure above, each dot is a single study and shows the average number of phenotypes reported per patient vs. the prevalence of mutations in individual genes. Point size corresponds to the number of patients in a given study. Looking at the figure, a strong association of missingness to specific mutations seems implausible, but we can't completely rule out that it biases our results. This is a limitation of our approach and should be taken into account when interpreting our conclusions.
 
-There is large missingness in age and sex data as well. While our main analysis ignores age and sex, the attached multiverse analysis shows that after accounting for between-study differences, age and sex differences are already mostly accounted for. We have also tried to impute age and sex data and show that models including imputed age and/or sex provide almost identical results.
+There is large missingness in age and sex data as well. While our main analysis ignores age and sex, Part 2 shows that after accounting for between-study differences, age and sex differences are already mostly accounted for. We have also tried to impute age and sex data and show that models including imputed age and/or sex provide almost identical results (see `r multiverse_part`).
 
 ## The model - an accessible explanation
+
+*An exact mathematical formulation is given in the following section, this section may be safely skipped.*
 
 As all models, the model we use simplifies and abstracts the medical reality in hope we can arrive at useful conclusions. Our model is a member of generalized linear model family, using logit link and hierarchical terms in a fully Bayesian treatment. Let's unpack this a little, starting with what a logit link does. In the following, we will describe how we handle a single phenotype as the estimation for individual phenotypes is mostly independent. 
 
@@ -187,7 +190,7 @@ studies_less_than_5 <- round(mean(mut_in_study$count < 5) * 100)
 The red line shows the true prevalence of a phenotype (assuming it is the same across multiple studies). Each point shows the observed prevalence of a single possible realization of a study. We see that the observed prevalence can differ substantially from the true value and that the spread decreases with increasing $n$. In our data we can't however expect large $n$ as the biggest $n$ we have is (`r max_mut_in_study$source`) with `r max_mut_in_study$count` patients having mutation in `r max_mut_in_study$gene` and in `r studies_less_than_5`% of cases there are less than 5 patients with a given mutation in the same study. 
 Also note that the observed values are clustered at discrete "levels" because e.g., among 5 patients you only can have prevalence of 0.2 or 0.4 and nothing in between. Further, you can see that with high prevalence, there is less variation in the observed prevalence.
 
-For mathematical convenience, the model does not work with prevalence directly, but with *odds*. Odds are just another way to express prevalence - for example, when the prevalence is $20\%$, we expect one patients to exhibit the phenotype for each four patients not exhibiting the phenotype, leading to odds $1:4$ or $0.25$ and log odds (base 10 here) of roughly $-0.6$. Unlike prevalence, which is constrained between 0 and 1,  odds can be any non-negative number. 
+For mathematical convenience, the model does not work with prevalence directly, but with *odds*. Odds are just another way to express prevalence - for example, when the prevalence is $20\%$, we expect one patient to exhibit the phenotype for each four patients not exhibiting the phenotype, leading to odds $1:4$ or $0.25$ and log odds (base 10 here) of roughly $-0.6$. Unlike prevalence, which is constrained between 0 and 1,  odds can be any non-negative number. 
 
 Most of the results of the model are reported as comparisons of odds in different populations. For this we use the ratio of the corresponding odds. E.g., when the odds ratio is 2, we expect the first population to have twice as much patients exhibiting the phenotype for each healthy patient than the second population.
 
@@ -203,7 +206,8 @@ tibble(gene = paste("Gene",1:3), odds = c(1, 5, 3)) %>% crossing(tibble(source =
   geom_line() + geom_point() +
   scale_y_log10("true odds") + 
   facet_wrap(~type) +
-  base_theme
+  base_theme + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5))
 ```
 
 Above on the leftmost panel we see that the two studies differ in the odds of the phenotype for each gene, but the ratio of odds for Gene 1 to Gene 2 (and 3) is the same in both studies (since the odds are shown on log scale this manifests as a constant gap between the two lines). This type of between study variation is allowed. On the other two panels, the odds ratio for Gene 1 to Gene 2 (and 3) differs between studies - this type of variation is not allowed by the model. 
@@ -215,7 +219,7 @@ The cLOF coefficient is held constant for all genes in a given phenotype, meanin
 This is the "linear" part of the model - we multiply odds, which is the same as adding the logarithm of the odds and addition is a neatly linear thing. 
 
 Now the "hierarchical" part. This ties the coefficients in the model in two important ways:
- i) it assumes small differences in odds across genes and studies are more likely than large differences and updates the estimates accordingly
+ i) it assumes that small differences in odds across genes and studies are more likely than large differences and updates the estimates accordingly
  ii) *partial pooling*: the degree to which odds are allowed to "jump around" across both genes and studies is informed by the data, e.g., if the odds are similar for all genes except one, the model will put higher weight on the possibility that the difference in the last mutation is just noise and shrink its estimate towards the average for other genes. On the other hand, if the odds vary wildly across all genes, the model will assume it is more likely this is a true variation and not shrink the estimate much. The amount of shrinkage also depends on the number of observations as estimates where there is a larger number of observations are shrunk less. The variability across studies is pooled in a similar way.
 
 Together those two features result in low risk of overfitting the data, even though we have very little observations for most study - gene - phenotype combinations.
@@ -270,7 +274,7 @@ $$
 
 Note that the prior on $\beta^1$ is $P$-dimensional multivariete normal $\mathcal{N}_P$, explicitly modelling the correlation $\bar{\boldsymbol{\Sigma}}$ between the prevalence of individual phenotypes and per-phenotype variance $\sigma_{2,p}$, while the other priors are univariete normal.
 
-The $N(0, 2)$ priors on the various parameters are mildly skeptical in that they exclude that any of the parameter would explain odds ratio larger than $\sim 50$. The attached multiverse analysis shows that the results are almost identical when the priors are different.
+The $N(0, 2)$ priors on the various parameters are mildly skeptical in that they exclude that any of the parameter would explain odds ratio larger than $\sim 50$. In `r multiverse_part`, we show that the results are almost identical when the priors are different.
 
 ## Main results
 
@@ -501,14 +505,15 @@ plot_all_diffs_to_single_gene <- function(data_long, target_phenotype, target_ge
     geom_point(aes(size = num_cases), position = pos, alpha = 0.5) +
     guides(color = FALSE) +
     scale_y_continuous(paste("Difference in prevalence of", target_phenotype, "to",target_gene)) +
-    base_theme
+    base_theme + 
+    theme(axis.title.y = element_text(size = 10))
 }
 
 plot_all_diffs_to_single_gene(data_long, "CI", "BBS07", bbs_genes_to_check)
 
 ```
 
-Once again, each dot is a study, the dot size corresponds to the number of patients with the mutation on x-axis and the y-axis shows the difference in prevalence against BBS7 (positive - BBS7 has higher prevalence). Once again most studies show no or positive difference, but some studies show negative difference and for BBS08 there are actually more studies showing effect in the opposite direction. This means that the model cannot conclude neither that BBS7 has higher prevalence of CI than each other mutation individually or (weaker) than the average of other mutations.
+Once again, each dot is a study, the dot size corresponds to the number of patients with the mutation on x-axis and the y-axis shows the difference in prevalence against BBS7 (positive - BBS7 has higher prevalence). Once again most studies show no or positive difference, but some studies show negative difference and for BBS08 there are actually more studies showing effect in the opposite direction. This means that the model can conclude neither that BBS7 has higher prevalence of CI than each other mutation individually nor (weaker) that it has higher CI prevalence than the average of other mutations.
 
 
 ### HEART phenotype and BBS2
@@ -545,7 +550,8 @@ Let's plot the between-study variability:
 ```{r, fig.width = 6, fig.height = 2.5}
 plot_diff_average_to_single_gene(data_long, "LIV", target_gene = "BBS01", genes_to_check = c("BBS02", "BBS01"), others_label = "BBS02")
 ```
-There is one study that show increase for BBS02 and one that shows decrease for BBS02. And the one showing decrease is actually the studies with larger sample size. The difference seems to be driven by studies that have BBS01 patients no or almost no BBS02 patients and can thus be attributed to between-study variability.
+
+There is one study that shows increase for BBS02 and one that shows decrease for BBS02. And the one showing decrease is actually the study with larger sample size. The difference seems to be driven by studies that have BBS01 patients and no or very few BBS02 patients and can thus be attributed to between-study variability.
 
 
 ### LIV phenotype and functional groups
