@@ -25,7 +25,7 @@ age_transform_from_age <- function(age) {
   }
 }
 
-phenotype_long_map <- c(RD = "Retinal distrophy",
+phenotype_long_map <- c(RD = "Retinal dystrophy",
                      OBE = "Obesity",
                      PD = "Polydactyly",
                      CI = "Cognitive impairment",

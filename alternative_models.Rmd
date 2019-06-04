@@ -47,7 +47,7 @@ data_long <- data_long_from_data(data)
 
 ### Base models
 
-Base models are those that work with (a subset of) the original dataset, without any imputation. The models are defined in file `models.R`. They differ in the model formula, subsets of the dataset they use and priors for model coefficients. The syntax for formulas in `brms` is described [in `brms` manual](https://rdrr.io/cran/brms/man/brmsformula.html) and will not be explained here. The model may work on filtered dataset - `lof` means filtered for only the mutations with certain LOF, `family`, `age`,`sex` and `age_sex` corresponds to filtering for patients with reported family, age, sex or both age and sex. Likewise `ethnic_group` and `family` filter only the data that has those values reported. The list of base models follows:
+Base models are those that work with (a subset of) the original dataset, without any imputation. The models are defined in file `models.R`. They differ in the model formula, subsets of the dataset they use and priors for model coefficients. The syntax for formulas in `brms` is described [in `brms` manual](https://rdrr.io/cran/brms/man/brmsformula.html) and will not be explained here. The model may work on filtered dataset - `lof` means filtered for only the mutations with certain LOF, `family`, `age`, `sex` and `age_sex` corresponds to filtering for patients with reported family, age, sex or both age and sex. Likewise `ethnic_group` and `family` filter only the data that has those values reported. The list of base models follows:
 
 ```{r}
 models_base %>% walk(function(def) {
@@ -210,7 +210,7 @@ Once again only very minor problems (e.g., age "20-39" for REN phenotype). We th
 
 ### Loss-of-function differences are of a relatively minor importance
 
-Using the simplest model, we see that cLOF difference are not well modelled for the CI, REP, REN and LIV phenotypes. 
+Using the simplest model, we see that cLOF differences are not well modelled for the CI, REP, REN and LIV phenotypes. 
 
 ```{r, fig.height=3}
 pp_check_helper("gene_only", "phenotype_lof")
@@ -246,7 +246,7 @@ pp_check_helper("gene_source_lof_per_gene", c("phenotype_lof","gene_lof"))
 
 ### Family information is of relatively minor influence
 
-We see the the `gene_source_lof` model already does not do badly in predicting prevalence within families, although including family in the model is definitely an improvement for some families.
+We see the `gene_source_lof` model already does not do badly in predicting prevalence within families, although including family in the model is definitely an improvement for some families.
 
 ```{r, fig.height = 2.5}
 pp_check_helper(c("gene_source_lof", "gene_source_lof_family"), "family_4")

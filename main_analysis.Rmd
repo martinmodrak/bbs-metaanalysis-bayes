@@ -52,7 +52,7 @@ Note in particular, that both age and sex are missing in almost half of the reco
 
 `loss_of_function` encodes the fact that the protein has certainly lost function (is truncated in both alleles). 
 
-For some analyses, we group the genes together according to *functional groups*, those are defined as folows:
+For some analyses, we group the genes together according to *functional groups*, those are defined as follows:
 
 ```{r}
 data %>% select(gene, functional_group) %>% distinct() %>% group_by(functional_group) %>% summarise(genes = paste(gene, collapse = ",")) %>% kable()
@@ -64,7 +64,7 @@ And here are the counts of individual mutations as observed in the data:
 data %>% group_by(gene) %>% summarise(count = length(gene)) %>% kable()
 ```
 
-While we include all of the genes in our computational model, we will mostly show only the most frequent mutations in the results here, those include BBS1 through BBS10 and BBS12.
+While we include all of the genes in our computational model, we will mostly show only the most frequent mutations in the results here; those include BBS1 through BBS10 and BBS12.
 
 ```{r}
 genes_to_show <- genes_to_show_from_data(data)
@@ -130,7 +130,7 @@ There is large missingness in age and sex data as well. While our main analysis 
 
 ## The model - an accessible explanation
 
-*An exact mathematical formulation is given in the following section, this section may be safely skipped.*
+*An exact mathematical formulation is given in the following section. This section may be safely skipped.*
 
 As all models, the model we use simplifies and abstracts the medical reality in hope we can arrive at useful conclusions. Our model is a member of generalized linear model family, using logit link and hierarchical terms in a fully Bayesian treatment. Let's unpack this a little, starting with what a logit link does. In the following, we will describe how we handle a single phenotype as the estimation for individual phenotypes is mostly independent. 
 
@@ -238,7 +238,7 @@ cat(strwrap(as.character(main_model_def$formula)[1], width = 80, prefix = "\n\t"
 
 ```
 
-this can be expressed in mathematical notation as:
+This can be expressed in mathematical notation as:
 
 $$
 \begin{aligned}
@@ -345,7 +345,7 @@ plot_pairwise_differences(main_model_def, fit, data_for_prediction_BBSome,  "hea
 ```
 
 The most conservative (closest to one) pairwise odds ratios within 95% posterior credible intervals.
-The reported odds ratio are for gene on the horizontal axis against the gene on the vertical axis.
+The reported odds ratios are for gene on the horizontal axis against the gene on the vertical axis.
 
 This shows pairs where we are fairly certain there is a systematic difference and the minimal magnitude of this difference consistent with the data.
 
@@ -359,7 +359,7 @@ plot_pairwise_differences(main_model_def, fit, data_for_prediction_BBSome, plot_
 ```
 
 The most extreme (furthest from one) pairwise odds ratios within 95% posterior credible intervals.
-The direction of the effect is not reported as effects in both directions might be similarly plausible - the  odds ratio are transformed to be larger than one in all cases.
+The direction of the effect is not reported as effects in both directions might be similarly plausible - the  odds ratios are transformed to be larger than one in all cases.
 
 This shows maximal differences consistent with our model and lets us constrain the differences between mutations for some phenotypes. We see that the data does not let us to put tight constraints on most differences - the tightest we get is OR of 3 - which would still be a very important difference for the clinical prognosis.
 
@@ -405,7 +405,7 @@ summary_50 %>%
     base_theme
 ```
 
-For most phenotypes we (expectedly) see that in cLOF mutations the phenotype is more likely. For LIV, RD and REP, the data is not very conclusive. The surprising part is the high posterior probability assigned to cLOF mutations having less severe phenotype in HEART. This might nevertheless be due to biases in reporting or due to higher lethality of HEART phenotype in cLOF mutations (and thus making the patients not be included in the dataset). It is however likely not a result of low sample size: there are `r sum(!is.na(data$HEART))` patients with the HEART phenotype reported, spread roughly equally between cLOF and other mutations.
+For most phenotypes we (expectedly) see that in cLOF mutations the phenotype is more likely. For LIV, RD and REP, the data is not very conclusive. The surprising part is the high posterior probability assigned to cLOF mutations having less severe phenotype in HEART. This might nevertheless be due to biases in reporting or due to higher lethality of HEART phenotype in cLOF mutations (and thus making the patients not included in the dataset). It is however likely not a result of low sample size: there are `r sum(!is.na(data$HEART))` patients with the HEART phenotype reported, spread roughly equally between cLOF and other mutations.
 
 ```{r saving_figures_for_publication}
 std_width = 8
@@ -526,7 +526,7 @@ data_long %>% filter(phenotype == "HEART", gene %in% bbs_genes_to_check) %>% gro
   kable()
 ```
 
-Lets look at comparison of BBS02 to prevalence across all other phenotypes:
+Let's look at comparison of BBS02 to prevalence across all other phenotypes:
 
 ```{r, fig.width = 6, fig.height = 2.5}
 plot_diff_average_to_single_gene(data_long, "HEART", "BBS02", bbs_genes_to_check)
