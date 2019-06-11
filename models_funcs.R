@@ -108,7 +108,7 @@ get_tidy_samples <- function(fit, data_for_prediction, scale = "response") {
   fitted_detailed <- fitted(fit, data_for_prediction, summary = FALSE, allow_new_levels = TRUE, nsamples = 1000, scale = scale)
   
   samples_tidy <- data_for_prediction %>% 
-    cbind(as.tibble(t(fitted_detailed))) %>%
+    cbind(as_tibble(t(fitted_detailed))) %>%
     gather("sample","value", V1:V1000) 
   
   
@@ -146,7 +146,7 @@ get_tidy_samples_prediction <- function(fit, data_for_prediction) {
   fitted_detailed <- posterior_predict(fit, data_for_prediction, summary = FALSE, allow_new_levels = TRUE, nsamples = 1000)
   
   samples_tidy <- data_for_prediction %>% 
-    cbind(as.tibble(t(fitted_detailed))) %>%
+    cbind(as_tibble(t(fitted_detailed))) %>%
     gather("sample","value", V1:V1000) 
   
 }

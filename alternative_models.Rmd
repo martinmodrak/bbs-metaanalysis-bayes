@@ -51,7 +51,7 @@ Base models are those that work with (a subset of) the original dataset, without
 
 ```{r}
 models_base %>% walk(function(def) {
-  cat(def$name,":\n\tformula:", strwrap(as.character(def$formula)[1], width = 80, prefix = "\n\t", initial = "" ), "\n\tdata filter: ", def$filter)
+  cat(def$name,":\n\tformula:", strwrap(paste(as.character(def$formula)[c(2,1,3)], collapse = " "), width = 80, prefix = "\n\t", initial = "" ), "\n\tdata filter: ", def$filter)
   if(def$note != "") {
     cat("\tNote:", def$note)
   }
@@ -99,7 +99,7 @@ The imputed models differ in the formulas used, but all use the default priors a
 
 ```{r}
 models_imputed %>% walk(function(def) {
-  cat(def$name,":\n\tformula:", strwrap(as.character(def$formula)[1], width = 80, prefix = "\n\t", initial = "" ))
+  cat(def$name,":\n\tformula:", strwrap(paste(as.character(def$formula)[c(2,1,3)], collapse = " "), width = 80, prefix = "\n\t", initial = "" ))
   if(def$note != "") {
     cat("\tNote:", def$note)
   }
@@ -231,8 +231,12 @@ There are problems (e.g., age "40+" for REN phenotype), but no category is compl
 We see the `gene_source_lof` model already accounts for a huge portion of the variability in prevalence between families, although including family in the model is definitely an improvement for some families.
 
 ```{r, fig.height = 2.5, fig.width = 5}
-pp_check_helper(c("gene_source_lof", "gene_source_lof_family"), "family_4")
+pp_check_helper(c("gene_source_lof"), "family_4")
 ```
+```{r}
+pp_check_helper(c("gene_source_lof_family"), "family_4")
+```
+
 
 ```{r, fig.height = 3}
 pp_check_helper(c("gene_source_lof", "gene_source_lof_family"), c("family_3"))
@@ -283,10 +287,14 @@ We see that for most phenotypes results are mostly positive, so family structure
 To measure the amount of variability explained by family structure, we can compute the intraclass correlation (ICC) of family for each phenotype following [Nakagawa & Schielzeth 2010, 'Repeatability for Gaussian and non‐Gaussian data: a practical guide for biologists'](https://doi.org/10.1111/j.1469-185X.2010.00141.x). For simplicity, we will use the `gene_source_lof_family` model, i.e. adding family on top of the model chosen for the main analysis. In this setting the ICC can be computed as:
 
 $$
-ICC = \frac{\sigma_{family}^2}{\sigma_{family}^2 +\sigma_{source}^2 + \sigma_{gene}^2 + \sigma_{cLOF}^2 + \frac{1}{3}\pi^2} \\
+ICC = \frac{\sigma_{family}^2}{\sigma_{family}^2 +\sigma_{source}^2 + \sigma_{gene}^2 + \sigma_{cLOF}^2 + \frac{1}{3}\pi^2}
+$$
+
+$$
 \sigma_{cLOF}^2 = Var(\beta_{cLOF} X_{cLOF})
 $$
-Where $\sigma_{family}$, $\sigma_{source}$ and $\sigma_{gene}$ are the variances of the respective random effects. The ICC can be very roughly interpreted as the proportion of total variance attributable to the grouping factor (family in this case) on the latent sacale. The estimates for individual phenotypes are:
+
+Where $\sigma_{family}$, $\sigma_{source}$ and $\sigma_{gene}$ are the variances of the respective random effects. Corresponding formulas can be devised for other model terms. The ICC can be very roughly interpreted as the proportion of total variance attributable to the grouping factor (family in this case) on the latent sacale. The estimates of ICC for the main covariates (family, source and gene) for individual phenotypes are:
 
 ```{r, fig.height= 4}
 icc_model <- "gene_source_lof_family"
@@ -307,9 +315,6 @@ fixed_variance <- fixed_samples %>%
   inner_join(n_clof, by = c("phenotype" = "phenotype")) %>%
   mutate(var_clof = b_clof^2 * (proportion_clof * (1 - proportion_clof)))
 
-fixed_variance
-
-
 varying_samples <- posterior_samples(icc_fit, pars = "sd_") 
 varying_sd <- varying_samples %>%
    mutate(sample = 1:n()) %>%
@@ -326,11 +331,16 @@ varying_sd <- varying_samples %>%
 
 icc <- fixed_variance %>% 
   inner_join(varying_sd, by = c("sample" = "sample", "phenotype" = "phenotype")) %>%
-  mutate(icc = sd_family ^ 2 / (sd_family ^ 2 + sd_source ^ 2 + sd_gene ^ 2 + var_clof + pi^2 / 3))
+  mutate(denominator = sd_family ^ 2 + sd_source ^ 2 + sd_gene ^ 2 + var_clof + pi^2 / 3,
+         family = sd_family ^ 2 / denominator,
+         gene = sd_gene ^ 2 / denominator,
+         source = sd_source ^ 2 / denominator
+         ) %>%
+  gather("covariate", "icc", family, gene, source)
 
 icc %>% 
   mutate(phenotype = factor(phenotype, levels = phenotypes_to_use)) %>%
-  group_by(phenotype) %>%
+  group_by(phenotype, covariate) %>%
   summarise(`Mean ICC` = mean(icc), 
                   `low 95%` = quantile(icc, probs = c(0.025)),
                   `low 50%` = quantile(icc, probs = c(0.25)),
@@ -340,10 +350,14 @@ icc %>%
   ggplot(aes(x = phenotype,ymin = `low 95%`, ymax = `high 95%`)) +
     geom_linerange(aes(ymin = `low 95%`, ymax = `high 95%`)) +
     geom_linerange(aes(ymin = `low 50%`, ymax = `high 50%`), size = 2) +
-    scale_y_continuous("ICC")
+    scale_y_continuous("ICC") +
+    facet_wrap(~ covariate)  +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5))
 ```
 
-Note that this roughly corresponds to the plot above, where CI, REP and REN have the most pronounced skew towards family structure playing a role. However, for the other phenotypes, very low values of the ICC are consistent with the data. Due to notable between-source variability, it is hard to make strong conclusions about family structure - it is still quite possible that there is important influence of family for all phenotypes, but it is masked by between-study variability.
+Thin lines are 95% credible intervals, thick are 50% credible intervals. Note that for family, the ICC roughly corresponds to the plot above, where CI, REP and REN have the most pronounced skew towards family structure playing a notable role. However, for the other phenotypes, very low values of the ICC are consistent with the data. We also see that the ICC for family is likely smaller than for source and likely not much larger than for the gene carrying the mutation.
+
+Due to notable between-source variability, it is hard to make strong conclusions about family structure - it is still quite possible that there is important influence of family for all phenotypes, but it is masked by between-study variability. We also know that the `gene_source_lof_family` model does not fit much better than `gene_source_lof` and so it is hard to put strong emphasis on those results.
 
 ### Ethnicity and ethnic groups
 

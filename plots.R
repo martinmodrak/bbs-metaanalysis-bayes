@@ -216,7 +216,7 @@ plot_gene_phenotype_estimates <- function(fit, data_for_prediction) {
   
   
   data_with_prediction <- data_for_prediction %>%
-    cbind(as.tibble(estimates)) %>% cbind(as.tibble(estimates50) %>% select(Q25,Q75)) 
+    cbind(as_tibble(estimates)) %>% cbind(as_tibble(estimates50) %>% select(Q25,Q75)) 
   
   data_with_prediction$lower <- data_with_prediction[,paste0("Q",posterior_interval_bounds[1] * 100)]
   data_with_prediction$upper <- data_with_prediction[,paste0("Q",posterior_interval_bounds[2] * 100)]
