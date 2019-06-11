@@ -1,5 +1,5 @@
 ---
-title: 'Supplemental Statistical Analysis for "Exploring the function of the BBSome using clinical data: Meta-analysis of genotype-phenotype associations in Bardet-Biedl Syndrome"'
+title: 'Supplemental Statistical Analysis for "Meta-analysis of genotype-phenotype associations in Bardet-Biedl Syndrome uncovers differences among causative genes"'
 output:
   pdf_document: 
      toc: true
