@@ -233,7 +233,8 @@ We see the `gene_source_lof` model already accounts for a huge portion of the va
 ```{r, fig.height = 2.5, fig.width = 5}
 pp_check_helper(c("gene_source_lof"), "family_4")
 ```
-```{r}
+
+```{r, fig.height = 2.5, fig.width = 5}
 pp_check_helper(c("gene_source_lof_family"), "family_4")
 ```
 
