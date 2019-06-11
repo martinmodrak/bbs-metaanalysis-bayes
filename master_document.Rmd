@@ -14,7 +14,7 @@ This document consists of three parts:
 * Part 2 describes all Bayesian models we tried throughout this project and discusses the reasoning behind our choice of model for the main analysis, in particular why between-study variability is crucial and taking into account complete loss of function (cLOF) useful while age, and sex can be omitted.
 * Part 3 shows how the conclusions of the paper hold under multiple different models.
 
-The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes or Zenodo, DOI: 10.5281/zenodo.2545609
+The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes or Zenodo, DOI: 10.5281/zenodo.3243264
 
 ```{r setup, echo=FALSE, message = FALSE, warning=FALSE}
 knitr::opts_chunk$set(echo=FALSE, cache = TRUE, cache.lazy = FALSE)

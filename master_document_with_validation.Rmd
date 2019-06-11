@@ -15,7 +15,7 @@ This document consists of four parts:
 * Part 3 discusses the overall ability of the model to predict a validation dataset
 * Part 4 shows how the conclusions of the paper hold under multiple different models and in the validation data.
 
-The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes or Zenodo, DOI: 10.5281/zenodo.2545609
+The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes or Zenodo, DOI: 10.5281/zenodo.3243264
 
 ```{r setup, echo=FALSE, message = FALSE, warning=FALSE}
 knitr::opts_chunk$set(echo=FALSE, cache = TRUE, cache.lazy = FALSE)
