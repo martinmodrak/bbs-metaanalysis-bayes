@@ -137,7 +137,7 @@ samples_diff_bbsome %>%
     # data_for_prediction_bbsome <- data_for_prediction %>% filter_for_BBSome()
     # 
     # samples <- get_tidy_samples(fit, data_for_prediction)
-    # samples_diff <- get_samples_pairwise_diff(def, samples) %>% mutate(is_relevant = odds_ratio >= min_interesting_effect | odds_ratio <= 1 /min_interesting_effect)
+    # samples_diff <- get_samples_pair♦wise_diff(def, samples) %>% mutate(is_relevant = odds_ratio >= min_interesting_effect | odds_ratio <= 1 /min_interesting_effect)
     # 
     # samples_diff_bbsome <- get_tidy_samples(fit, data_for_prediction_bbsome) %>% get_samples_pairwise_diff(def, .) %>% mutate(is_relevant = odds_ratio >= min_interesting_effect | odds_ratio <= 1 /min_interesting_effect)
     # 
@@ -326,10 +326,11 @@ freq_conclusions <- freq_conclusions %>%
 ```
 
 
-```{r, fig.width = 10, fig.height = 6.5}
+```{r, fig.width = 11.5, fig.height = 6.5}
 nice_model_name <- function(x)  {
   x %>% gsub("only","none", .) %>% 
     gsub("lof_per_gene","cLOF (by gene)", .) %>% 
+    gsub("ethnic_group","ethnic group", .) %>% 
     gsub("lof","cLOF", .) %>% 
     gsub("gene_","",.) %>% gsub("filtered_","filtered ", .) %>%
     gsub("very_narrow","very narrow", .) %>% 
@@ -349,15 +350,19 @@ min_prob = 1e-3
 max_prob = 1-1e-3
 
 evaluation_processed <- evaluation %>% 
+  arrange(grepl("imputed", model_name), grepl("filtered", model_name), 
+          desc(grepl("source", model_name)), grepl("none", model_name), grepl("family", model_name), 
+          grepl("lof", model_name)) %>%
   mutate(model_nice = factor(nice_model_name(model_name), levels = c(
-   nice_model_name(names(all_models))
+   nice_model_name(model_name)
   ))) %>%
   gather("Conclusion","Probability", -model_name, -model_nice) %>%
   mutate(Probability = pmin(pmax(Probability, min_prob),max_prob), #Avoid probabilities of 0 and 1
          Conclusion = factor(Conclusion, levels = levels(freq_conclusions$Conclusion)),
          Category = case_when(model_name %in% c("gene_source", "gene_source_lof", "gene_source_filtered_lof") ~ "Main",
-                              model_name %in% c("gene_only", "gene_lof", "gene_lof_per_gene", "gene_only_filtered_lof", "gene_source_very_narrow", "gene_imputed_age_sex") ~ "Bad fits", 
-                              TRUE ~ "Secondary") %>% factor(levels = c("Main","Secondary","Bad fits"))) 
+                              !grepl("source", model_name) ~ "Problematic fits",
+                              model_name %in% c("gene_source_very_narrow") ~ "Problematic fits", 
+                              TRUE ~ "Secondary") %>% factor(levels = c("Main","Secondary","Problematic fits"))) 
 
 plots_na_color <- "#606060"
 
@@ -400,9 +405,9 @@ conclusions_plot
 
 ```
 
-A heatmap of posterior probability of statements characterizing individual conclusions. Note that the probability is on logit scale. All Bayesian models include gene as covariate but may also include additional covariates: source, age, sex and certain loss of function (cLOF) - either as a global covariate or by gene. Since age and sex are not available for all data, we can either fit the model only to patients where those are reported (filtered) or impute missing data (imputed). Instead of using cLOF as a covariate, we can fit the model using only patients with cLOF mutations (filtered cLOF). For most models we include a correlation structure across phenotypes (e.g., that two phenotypes occur frequently together across all genes), but this structure may be absent (no corr.) or replaced with a correlation structure across genes (gene corr. - e.g., that two genes have similar pattern of effects across all phenotypes). We also tried modifying the width of prior distributions (wide, narrow, very narrow). See Part 2 of this supplement for a detailed description of all models and the imputation procedure. Dark grey indicates that the question could not be evaluated for the given model (currently only asking for cLOF differences in models that exclude cLOF). The "Bad fits" category is reserved for models we now fit the data badly, as discussed in Part 2.
+A heatmap of posterior probability of statements characterizing individual conclusions. Note that the probability is on logit scale. All Bayesian models include gene as covariate but may also include additional covariates: source, age, sex, ethnicity or ethnic group, family and certain loss of function (cLOF) - either as a global covariate or by gene. Since age and sex are not available for all data, we can either fit the model only to patients where those are reported (filtered) or impute missing data (imputed). Instead of using cLOF as a covariate, we can fit the model using only patients with cLOF mutations (filtered cLOF). For most models we include a correlation structure across phenotypes (e.g., that two phenotypes occur frequently together across all genes), but this structure may be absent (no corr.) or replaced with a correlation structure across genes (gene corr. - e.g., that two genes have similar pattern of effects across all phenotypes). We also tried modifying the width of prior distributions (wide, narrow, very narrow). See Part 2 of this supplement for a detailed description of all models and the imputation procedure. Dark grey indicates that the question could not be evaluated for the given model (currently only asking for cLOF differences in models that exclude cLOF). The "Problematic fits" category is reserved for models we know do not capture some important variability in the dataset, as discussed in Part 2.
 
-Note: posterior probabilities are clamped to be at least $0.001$ and at most $0.999$ as the sampling scheme used does not let us to be very confident in the tails of the distribution.
+Note: posterior probabilities are clamped to be at least $0.001$ and at most $0.999$ as the sampling scheme used does not let us to be very confident in the tails of the distribution. It is possible that with more computational resources some of the posterior probabilities will be more extreme.
 
 Some patterns to notice:
 
@@ -547,7 +552,7 @@ Heatmap of evaluation on validation dataset, using exactly the same criteria as 
 
 ## Combining all results
 
-```{r, fig.width= 11, fig.height=7}
+```{r, fig.width= 12, fig.height=7}
 
 
 build_combined_conclusions_plot <- function(freq_conclusions_plot, conclusions_plot, validation_plot, rel_widths_plots, rel_widths_legend, rel_heights_legend) {
@@ -593,7 +598,7 @@ if(include_validation) {
     inner_join(freq_conclusions %>% select(Conclusion, include_in_main), by = c("Conclusion" = "Conclusion")) %>% filter(include_in_main)
   
 } else {
-  rel_widths_plots <- c(0.98, 1.1, 0.01)
+  rel_widths_plots <- c(1, 1.28, 0.01)
   rel_widths_legend <-  c(7,1)
   rel_heights_legend <-  c(1.0,0.01,1.1)
 }
@@ -603,7 +608,7 @@ build_combined_conclusions_plot(freq_conclusions_plot, conclusions_plot, validat
 #TODO: check accesibility for those with impaired color perception.
 ```
 
-```{r, fig.width= 11, fig.height=6}
+```{r, fig.width= 12, fig.height=6}
 #Version with filtered conclusions for main paper
 if(include_validation) {
   validation_plot <- build_validation_conclusions_plot(evaluation_validation_for_main)
@@ -619,17 +624,16 @@ combined_conclusions_plot <- build_combined_conclusions_plot(
   rel_widths_legend = rel_widths_legend, 
   rel_heights_legend = rel_heights_legend) 
 
-
-combined_conclusions_plot %>% ggsave(here("tmp_pics","conclusions.pdf"), ., width = 11, height = 6)
+combined_conclusions_plot %>% ggsave(here("tmp_pics","conclusions.pdf"), ., width = 12, height = 6)
 ```
 
 
-This is a combined plot for both frequentist and Bayesian analysis, once again showing mostly consistent results even when frequentist analyses are taken into account. The only big difference is that some of the HEART and LIV conclusions are not supported by most Bayesian analyses, or only those ignoring between-study variability. `r if(include_validation) { "The same conclusions also fail to hold in the validation dataset, indicating that between-study variability is indeed important."} `
+This is a combined plot for both frequentist and Bayesian analysis, once again showing mostly consistent results even when frequentist analyses are taken into account. The only big difference is that some of the HEART and LIV conclusions are not supported by most Bayesian analyses, or only those ignoring between-study variability. `r if(include_validation) { "The same conclusions also fail to hold in the validation dataset, indicating that between-study variability is indeed important."} ` Also, Part 1 discusses some of those conclusions and shows how between-study variability is likely important for them.
 
 `r if(include_validation) { '
 Note that the conclusions included here and their exact criteria were set before we had access to the validation dataset.
 
-Let\'s investigate the inconsistencies between validation data and the main model. First, the claim that BBS4 is the most severe, which we would actually expect NOT to validate, as it is likely false according to our model, but the "BBS4 top odds" conclusion was validated. However, the BBS4 is only present in 5 patients "Elizabeth" source and although it has one of highest odds (taking all phenotypes together for simplicity), it is very similar to the odds for others, so this is comparable to noise level. Also the "among top 3 odds" clause we used is easier to satisfy when not all BBSome genes are present in the validation data: ' }`
+Let us investigate the inconsistencies between validation data and the main model. First, the claim that BBS4 is the most severe, which we would actually expect NOT to validate, as it is likely false according to our model, but the "BBS4 top odds" conclusion was validated. However, the BBS4 is only present in 5 patients "Elizabeth" source and although it has one of highest odds (taking all phenotypes together for simplicity), it is very similar to the odds for others, so this is comparable to noise level. Also the "among top 3 odds" clause we used is easier to satisfy when not all BBSome genes are present in the validation data: ' }`
 
 ```{r}
 if(include_validation) {

@@ -36,17 +36,58 @@ my_ppc_bars <- function(...) {
   my_ppc(ppc_bars, ...) + theme(axis.text = element_blank())
 }
 
-my_ppc_bars_grouped <- function(group, ...) {
+my_ppc_bars_grouped <- function(y, yrep, group, ...) {
+  if(is.null(knitr::current_input())) {
+    fatten = 1.5
+    size = 1
+  } else {
+    fatten = 0.8
+    size = 0.5
+  }
+  
+  
   n_groups <- length(unique(group))
   if(ceiling(n_groups / 7) < (n_groups / 6)) {
     ncol = 7
   } else {
     ncol = 6
   }
-  res <- my_ppc(ppc_bars_grouped, facet_args = list(ncol = ncol), group = group, ...) + 
-    theme(axis.text = element_blank())
   
-  suppressMessages(res  +  scale_x_continuous(breaks = c(0,1)))
+  actual <- aggregate(y, by = list(group = group), FUN = mean) %>% rename(`1` = x) %>%
+    mutate(`0` = 1 - `1`) %>% gather("prediction", "proportion", `0`, `1`) %>%
+    mutate(prediction = factor(prediction))
+  
+  pred <- yrep %>% t() %>% as.data.frame() %>% 
+    mutate(group = group) %>%
+    gather("sample", "value", -group) %>%
+    group_by(group, sample) %>%
+    summarise(proportion_sample = mean(value)) %>%
+    group_by(group) %>%
+    summarise(proportion = mean(proportion_sample), proportion_low = quantile(proportion_sample, 0.025), proportion_high = quantile(proportion_sample, 0.975)) %>%
+    ungroup() %>%
+    mutate(prediction = "1")
+  
+  pred <- rbind(pred, pred %>% 
+                  mutate(prediction = "0", proportion = 1 - proportion, 
+                         proportion_low_orig = proportion_low, proportion_low = 1 - proportion_high, 
+                         proportion_high = 1 - proportion_low_orig) %>%
+                  select(-proportion_low_orig)
+                  ) %>% 
+    mutate(prediction = factor(prediction))
+  
+  
+  
+  pred %>% ggplot(aes(x = prediction, y = proportion)) +
+    geom_bar(data = actual, stat = "identity", fill = "#d1e1ec", color = "#b3cde0") +
+    geom_pointrange(aes(ymin = proportion_low, ymax = proportion_high), color = "#011f4b", size = size, fatten = fatten) + 
+    facet_wrap(~ group, ncol = ncol) +
+    # scale_fill_manual("", values = "#d1e1ec",
+    #                   labels = "Observed") +
+    # scale_color_manual("", values = "#b3cde0",
+    #                    labels = "Predicted") +
+    # guides(color = guide_legend(order = 1),
+    #        fill = guide_legend(order = 2)) +
+    theme(axis.text = element_blank())
 }
 
 run_pp_checks <- function(model_def, fit, data_long, 
@@ -71,13 +112,13 @@ run_pp_checks <- function(model_def, fit, data_long,
   
   
   if("overall" %in% types) {
-    (my_ppc_bars(data$phenotype_value, predicted) + ggtitle(paste0("PPCheck overall for ", model_def$name))) %>% out_func
+    (my_ppc_bars(observed, predicted) + ggtitle(paste0("PPCheck overall for ", model_def$name))) %>% out_func
   }
   if("gene" %in% types) {
-    (my_ppc_bars_grouped(data$phenotype_value, predicted, group = data$gene) + ggtitle(paste0("PPCheck gene for ", model_def$name))) %>% out_func
+    (my_ppc_bars_grouped(observed, predicted, group = data$gene) + ggtitle(paste0("PPCheck gene for ", model_def$name))) %>% out_func
   }
   if("source" %in% types) {
-    (my_ppc_bars_grouped(data$phenotype_value, predicted, group = data$source) + 
+    (my_ppc_bars_grouped(observed, predicted, group = data$source) + 
        ggtitle(paste0("PPCheck source for ", model_def$name)) +
        small_labels
      ) %>% out_func
@@ -85,52 +126,52 @@ run_pp_checks <- function(model_def, fit, data_long,
   
   filter_10 <- data %>% group_by(source) %>% mutate(include = length(unique(ID)) >= 10) %>% pull(include)
   if("source_10" %in% types) {
-    (my_ppc_bars_grouped(data$phenotype_value[filter_10], predicted[, filter_10], group = data$source[filter_10]) + 
+    (my_ppc_bars_grouped(observed[filter_10], predicted[, filter_10], group = data$source[filter_10]) + 
        ggtitle(paste0("PPCheck sources with >= 10 patients for ", model_def$name)) +
        small_labels
     ) %>% out_func
   }
   if("source_10_lof" %in% types) {
-    (my_ppc_bars_grouped(data$phenotype_value[filter_10], predicted[, filter_10], group = interaction(data$loss_of_function[filter_10], data$source[filter_10])) + 
+    (my_ppc_bars_grouped(observed[filter_10], predicted[, filter_10], group = interaction(data$loss_of_function[filter_10], data$source[filter_10])) + 
        ggtitle(paste0("PPCheck sources with >= 10 patients for ", model_def$name)) +
        small_labels
     ) %>% out_func
   }
   
-  filter_family_4 <- data %>% group_by(family_id) %>% mutate(include = !any(is.na(family_id)) & length(unique(ID)) >= 4) %>% pull(include)
+  filter_family_4 <- suppressWarnings(data %>% group_by(family_id) %>% mutate(include = !any(is.na(family_id)) & length(unique(ID)) >= 4) %>% pull(include))
   if("family_4" %in% types) {
-    (my_ppc_bars_grouped(data$phenotype_value[filter_family_4], predicted[, filter_family_4], group = data$family_id[filter_family_4]) + 
+    (my_ppc_bars_grouped(observed[filter_family_4], predicted[, filter_family_4], group = data$family_id[filter_family_4]) + 
        ggtitle(paste0("PPCheck families with >= 4 patients for ", model_def$name)) +
        small_labels
     ) %>% out_func
   }
 
-  filter_family_3 <- data %>% group_by(family_id) %>% mutate(include = !any(is.na(family_id)) & length(unique(ID)) == 3) %>% pull(include)
+  filter_family_3 <- suppressWarnings(data %>% group_by(family_id) %>% mutate(include = !any(is.na(family_id)) & length(unique(ID)) == 3) %>% pull(include))
   if("family_3" %in% types) {
-    (my_ppc_bars_grouped(data$phenotype_value[filter_family_3], predicted[, filter_family_3], group = data$family_id[filter_family_3]) + 
+    (my_ppc_bars_grouped(observed[filter_family_3], predicted[, filter_family_3], group = data$family_id[filter_family_3]) + 
        ggtitle(paste0("PPCheck families with exactly 3 patients for ", model_def$name)) +
        small_labels
     ) %>% out_func
   }
   if("ethnic_group" %in% types) {
-    (my_ppc_bars_grouped(data$phenotype_value, predicted, group = data$ethnic_group) + ggtitle(paste0("PPCheck ethnic group for ", model_def$name))) %>% out_func
+    (my_ppc_bars_grouped(observed, predicted, group = data$ethnic_group) + ggtitle(paste0("PPCheck ethnic group for ", model_def$name))) %>% out_func
   }
   
   filter_ethnicity_10 <- data %>% group_by(ethnicity) %>% mutate(include = length(unique(ID)) >= 10) %>% pull(include)
   
   if("ethnicity_10" %in% types) {
-    (my_ppc_bars_grouped(data$phenotype_value[filter_ethnicity_10], predicted[, filter_ethnicity_10], group = data$ethnicity[filter_ethnicity_10]) + ggtitle(paste0("PPCheck ethnicities with >= 10 patients for ", model_def$name))) %>% out_func
+    (my_ppc_bars_grouped(observed[filter_ethnicity_10], predicted[, filter_ethnicity_10], group = data$ethnicity[filter_ethnicity_10]) + ggtitle(paste0("PPCheck ethnicities with >= 10 patients for ", model_def$name))) %>% out_func
   }
   
   
   if("gene_lof" %in% types) {
-    (my_ppc_bars_grouped(data$phenotype_value, predicted, group = interaction(data$loss_of_function, gene_groups)) + ggtitle(paste0("PPCheck gene_lof for ", model_def$name))) %>% out_func
+    (my_ppc_bars_grouped(observed, predicted, group = interaction(data$loss_of_function, gene_groups)) + ggtitle(paste0("PPCheck gene_lof for ", model_def$name))) %>% out_func
   }
   if("phenotype" %in% types) {
-    (my_ppc_bars_grouped(data$phenotype_value, predicted, group = data$phenotype) + ggtitle(paste0("PPCheck phenotype for ", model_def$name))) %>% out_func
+    (my_ppc_bars_grouped(observed, predicted, group = data$phenotype) + ggtitle(paste0("PPCheck phenotype for ", model_def$name))) %>% out_func
   }
   if("phenotype_lof" %in% types) {
-    (my_ppc_bars_grouped(data$phenotype_value, predicted, group = interaction(data$loss_of_function, data$phenotype)) + ggtitle(paste0("PPCheck phenotype + LOF for ", model_def$name))) %>% out_func
+    (my_ppc_bars_grouped(observed, predicted, group = interaction(data$loss_of_function, data$phenotype)) + ggtitle(paste0("PPCheck phenotype + LOF for ", model_def$name))) %>% out_func
   }
   
   

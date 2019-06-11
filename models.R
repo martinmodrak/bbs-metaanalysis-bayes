@@ -7,7 +7,7 @@ phenotypes_to_show <- phenotypes_to_use_factor
 genes_to_show_from_data <- function(data) {
   data %>% select(gene,functional_group) %>% distinct() %>% 
     filter(functional_group != c("Others")) %>% get("gene", .)
-} 
+}
 
 
 intercept_prior <- prior(normal(0,2), class = Intercept)
@@ -17,35 +17,67 @@ family_sd_prior <- prior(normal(0,1), class = sd, group = "family_id")
 
 default_priors <- c(intercept_prior, sd_prior)
 
+family_default_priors <- c(default_priors, family_sd_prior)
 
-formula_gene_only <- brmsformula(phenotype_value ~ (1||phenotype) + ((0 + phenotype)|gene) , family = "bernoulli")
+formula_gene_only <- phenotype_value ~ (1||phenotype) + ((0 + phenotype)|gene) 
 
-formula_gene_source <- brmsformula(update(formula_gene_only, ~ . + ((0 + phenotype)||source)) , family = "bernoulli")
+formula_gene_source <- update(formula_gene_only, ~ . + ((0 + phenotype)||source)) 
 
 add_lof <- function(original_formula) {
-  brmsformula(update(original_formula, ~ . +  phenotype : loss_of_function_certain) , family = "bernoulli")
+  update(original_formula, ~ . +  phenotype : loss_of_function_certain) 
 }
 add_lof_per_gene <- function(original_formula) {
-  brmsformula(update(original_formula, ~ . + ((0 + phenotype : loss_of_function_certain)||gene)) , family = "bernoulli")
+  update(original_formula, ~ . + ((0 + phenotype : loss_of_function_certain)||gene)) 
+}
+
+add_family <- function(orginal_formula) {
+  update.formula(orginal_formula,  ~ . + ((0 + phenotype)||family_id))
+}
+
+add_ethnic_group <- function(original_formula) {
+  update.formula(original_formula,  ~ . + ((0 + phenotype)||ethnic_group))
+}
+
+add_ethnicity <- function(original_formula) {
+  update.formula(original_formula,  ~ . + ((0 + phenotype)||ethnicity))
+}
+
+add_sex <- function(original_formula) {
+  update.formula(original_formula,  ~ . + ((0 + phenotype)||sex))
+}
+
+add_age <- function(original_formula) {
+  update.formula(original_formula, ~ . + (0 + age_std_for_model||phenotype))
 }
 
 formula_gene_lof <- add_lof(formula_gene_only)
 formula_gene_lof_per_gene <- add_lof_per_gene(formula_gene_lof)
 
+formula_gene_family <- add_family(formula_gene_only)
+formula_gene_ethnic_group <- add_ethnic_group(formula_gene_only)
+formula_gene_ethnicity <- add_ethnicity(formula_gene_only)
+
+formula_gene_ethnic_group_lof <- add_lof(formula_gene_ethnic_group)
+formula_gene_ethnicity_lof <- add_lof(formula_gene_ethnicity)
+
+formula_gene_ethnic_group_lof_per_gene <- add_lof_per_gene(formula_gene_ethnic_group_lof)
+formula_gene_ethnicity_lof_per_gene <- add_lof(formula_gene_ethnicity_lof)
+
+formula_gene_family_age_sex <- add_age(add_sex(formula_gene_family))
+
 formula_gene_source_lof <- add_lof(formula_gene_source)
 formula_gene_source_lof_per_gene <- add_lof_per_gene(formula_gene_source_lof)
 
-formula_gene_source_family <- brmsformula(update.formula(formula_gene_source,  ~ . + (1||family_id)), family = "bernoulli")
-formula_gene_source_lof_family <- brmsformula(update.formula(formula_gene_source_lof,  ~ . + (1||family_id)), family = "bernoulli")
+formula_gene_source_family <- add_family(formula_gene_source)
+formula_gene_source_lof_family <- add_family(formula_gene_source_lof)
 
-formula_gene_source_lof_ethnic_group <- brmsformula(update.formula(formula_gene_source_lof,  ~ . + (1||ethnic_group : phenotype)), family = "bernoulli")
+formula_gene_source_lof_ethnic_group <- add_ethnic_group(formula_gene_source_lof)
 
-formula_gene_source_sex <- brmsformula(update.formula(formula_gene_source,  ~ . + (1||sex : phenotype)), family = "bernoulli")
+formula_gene_source_sex <- add_sex(formula_gene_source)
 
-formula_gene_source_age <- brmsformula(update.formula(formula_gene_source, ~ . + (0 + age_std_for_model||phenotype)), family = "bernoulli")                                       
+formula_gene_source_age <- add_age(formula_gene_source)                                       
 
-formula_gene_age_sex <- brmsformula(update(formula_gene_only, ~ . + (1||sex : phenotype) + (0 + age_std_for_model||phenotype)) , 
-                               family = "bernoulli")
+formula_gene_age_sex <- add_age(formula_gene_source_sex) 
 
 formula_gene_age_sex_lof <- add_lof(formula_gene_age_sex)
 formula_gene_age_sex_lof_per_gene <- add_lof_per_gene(formula_gene_age_sex_lof)
@@ -78,6 +110,62 @@ models_base <- list(
     additional_components = c("lof per gene"), filter = "none"
   ),
   
+  gene_family = list(
+    formula = formula_gene_family, 
+    priors = family_default_priors, 
+    note = "",
+    additional_components = c("family"), filter = "family"
+  ),
+
+  gene_ethnic_group = list(
+    formula = formula_gene_ethnic_group, 
+    priors = default_priors, 
+    note = "",
+    additional_components = c("ethnic_group"), filter = "ethnic_group"
+  ),
+
+  gene_ethnicity = list(
+    formula = formula_gene_ethnicity, 
+    priors = default_priors, 
+    note = "",
+    additional_components = c("ethnicity"), filter = "ethnicity"
+  ),
+  
+  gene_ethnic_group_lof = list(
+    formula = formula_gene_ethnic_group_lof, 
+    priors = default_priors, 
+    note = "",
+    additional_components = c("lof", "ethnic_group"), filter = "ethnic_group"
+  ),
+
+  gene_ethnicity_lof = list(
+    formula = formula_gene_ethnicity_lof, 
+    priors = default_priors, 
+    note = "",
+    additional_components = c("lof","ethnicity"), filter = "none"
+  ),
+  
+  gene_ethnic_group_lof_per_gene = list(
+    formula = formula_gene_ethnic_group_lof_per_gene, 
+    priors = default_priors, 
+    note = "",
+    additional_components = c("lof per gene","ethnic_group"), filter = "none"
+  ),
+
+  gene_ethnicity_lof_per_gene = list(
+    formula = formula_gene_ethnicity_lof_per_gene, 
+    priors = default_priors, 
+    note = "",
+    additional_components = c("lof per gene","ethnicity"), filter = "none"
+  ),
+  
+  gene_family_filtered_age_sex_lof = list(
+    formula = formula_gene_family_age_sex, 
+    priors = family_default_priors, 
+    note = "",
+    additional_components = c("family", "age", "sex"), filter = c("family","age","sex","lof")
+  ),
+  
   gene_source = list(
     formula = formula_gene_source, 
     priors = default_priors, 
@@ -94,7 +182,7 @@ models_base <- list(
   ),
   gene_source_family = list(
     formula = formula_gene_source_family, 
-    priors = c(default_priors, family_sd_prior), 
+    priors = family_default_priors, 
     note = "",
     additional_components = c("source","family"), filter = "family"
   ),
@@ -141,18 +229,18 @@ models_base <- list(
   ),
   
   gene_source_genecor = list(
-    formula = brmsformula(phenotype_value ~ (1 || phenotype) + ((0 + gene) | phenotype) + 
+    formula = phenotype_value ~ (1 || phenotype) + ((0 + gene) | phenotype) + 
                             ((0 + phenotype) || source), 
-                          family = "bernoulli"), 
+                           
     priors = default_priors, 
     note = "",
     additional_components = c("source"), filter = "none"
   ),
   
   gene_source_nocor = list(
-    formula = brmsformula(phenotype_value ~ (1 || phenotype) + ((0 + phenotype)||gene) + 
+    formula = phenotype_value ~ (1 || phenotype) + ((0 + phenotype)||gene) + 
                             ((0 + phenotype) || source)  , 
-                          family = "bernoulli"), 
+                           
     priors = default_priors, 
     note = "",
     additional_components = c("source"), filter = "none"
@@ -197,20 +285,20 @@ models_base <- list(
     formula = formula_gene_age_sex, 
     priors = default_priors, 
     note = "",
-    additional_components = c("age","sex"), filter = "age_sex"
+    additional_components = c("age","sex"), filter = c("age","sex")
   ),
   
   gene_lof_filtered_age_sex = list(
     formula = formula_gene_age_sex_lof, 
     priors = default_priors, 
     note = "",
-    additional_components = c("age","sex", "lof"), filter = "age_sex"
+    additional_components = c("age","sex", "lof"), filter = c("age","sex")
   ),
   gene_lof_per_gene_filtered_age_sex = list(
     formula = formula_gene_age_sex_lof_per_gene, 
     priors = c(default_priors, b_prior), 
     note = "",
-    additional_components = c("age","sex", "lof per gene"), filter = "age_sex"
+    additional_components = c("age","sex", "lof per gene"), filter = c("age","sex")
   )
   
 ) %>% imap(
@@ -244,8 +332,7 @@ models_imputed <- list(
     ),
   
   gene_source_imputed_age_sex = list(
-    formula = brmsformula(update.formula(formula_gene_source, ~ . + (0 + age_std_for_model||phenotype)), 
-                          family = "bernoulli"), 
+    formula = update.formula(formula_gene_source, ~ . + (0 + age_std_for_model||phenotype)), 
     priors = default_priors, 
     note = "",
     additional_components = c("source", "age", "sex")

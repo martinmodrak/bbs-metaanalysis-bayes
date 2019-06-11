@@ -85,14 +85,15 @@ data_long %>%
   group_by(source, phenotype, gene) %>% 
   filter(functional_group == "BBSome", gene != "BBS18") %>%
   summarise(n_patients = length(phenotype_value), proportion = sum(phenotype_value) / n_patients) %>%
+  
   ggplot(aes(x = gene, y = proportion, size = n_patients, color = gene)) +
-  geom_jitter(alpha = 0.3, height = 0, width = 0.3) +
-  facet_wrap(~phenotype, ncol = 3) +
-  scale_x_discrete(labels = bbs_labeller) + 
-  scale_y_continuous("Proportion of phenotype") +
-  scale_size_continuous(range = c(0.5,4)) +
-  guides(color = FALSE) +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5))
+    geom_jitter(alpha = 0.3, height = 0, width = 0.3) +
+    facet_wrap(~phenotype, ncol = 3) +
+    scale_x_discrete(labels = bbs_labeller) + 
+    scale_y_continuous("Proportion of phenotype") +
+    scale_size_continuous(range = c(0.5,4)) +
+    guides(color = FALSE) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust =0.5))
 ```
 
 Here, every point represents the proportion of patients with a given mutation that manifested a given phenotype in one study. The point size represents the number of patients with the mutation in the study. We see that even studies with a relatively large number of patients show very different proportions. We are therefore confident that allowing for between-study heterogeneity is important for analyzing the data correctly. In Part 2, we also show an attempt to model the studies as homogenous and find it to be a bad fit, although most of the qualitative conclusions are supported in both models, as described in `r multiverse_part`.

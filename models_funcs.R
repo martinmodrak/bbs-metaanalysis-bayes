@@ -1,14 +1,18 @@
 filter_data_by_model_def <- function(def, data_long) {
-  switch (def$filter,
-          "none" = data_long,
-          "lof" = data_long %>% filter(loss_of_function == "certain"),
-          "family" = data_long %>% filter(!is.na(family_id)),
-          "age" = data_long %>% filter(!is.na(age_std_for_model)),
-          "sex" = data_long %>% filter(!is.na(sex)),
-          "ethnic_group" = data_long %>% filter(ethnic_group != "NA"),
-          "age_sex" = data_long %>% filter(!is.na(age_std_for_model), !is.na(sex)),
-          stop("Unrecognized filter")
-  )  
+  ret <- data_long
+  for(filter in def$filter){
+    ret <- switch (filter,
+            "none" = ret,
+            "lof" = ret %>% filter(loss_of_function == "certain"),
+            "family" = ret %>% filter(!is.na(family_id)),
+            "age" = ret %>% filter(!is.na(age_std_for_model)),
+            "sex" = ret %>% filter(!is.na(sex)),
+            "ethnic_group" = ret %>% filter(ethnic_group != "NA"),
+            "ethnicity" = ret %>% filter(ethnicity != "NA"),
+            stop("Unrecognized filter")
+    )  
+  }
+  ret
 }
 
 
@@ -29,7 +33,7 @@ fit_base_model <- function(def, data_long, ...) {
 
   data <- filter_data_by_model_def(def, data_long)
   
-  brm(formula = def$formula, data = data, prior = def$priors, file = here(stored_fits_dir,def$name),
+  brm(formula = brmsformula(def$formula, family = "bernoulli"), data = data, prior = def$priors, file = here(stored_fits_dir,def$name),
       control = list(adapt_delta = 0.95), ...)   
 }
 
@@ -47,14 +51,16 @@ fit_imputed_model <- function(def, data_imputed) {
     dir.create(here(stored_fits_dir))
   }
   
-  brm_multiple(formula = def$formula, data = data_imputed, prior = def$priors, file = here(stored_fits_dir,def$name),
+  brm_multiple(formula = brmsformula(def$formula, family = "bernoulli"), data = data_imputed, prior = def$priors, file = here(stored_fits_dir,def$name),
       control = list(adapt_delta = 0.95))   
 }
 
 data_for_prediction_base_model <- function(def, genes_to_show, phenotypes_to_show, 
                                            age_transform = NULL, 
                                            ages = c(10,30,50), sexes = c("F","M"),
-                                           ethnic_groups = "EG-D", loss_of_function_certain = 1) {
+                                           ethnic_groups = "EG-D", 
+                                           ethnicities = c("Saudi Arabian", "French", "Pakistani", "Spanish", "Turkish"),
+                                           loss_of_function_certain = 1) {
   result <-  tibble(gene = genes_to_show) %>%
     crossing(tibble(phenotype = phenotypes_to_show)) %>% 
     mutate(functional_group = functional_group_for_gene(gene))
@@ -85,6 +91,10 @@ data_for_prediction_base_model <- function(def, genes_to_show, phenotypes_to_sho
   
   if("ethnic_group" %in% def$additional_components) {
     result <- result %>% crossing(tibble(ethnic_group = ethnic_groups))
+  }
+
+  if("ethnicity" %in% def$additional_components) {
+    result <- result %>% crossing(tibble(ethnicity = ethnicities))
   }
   
   result
@@ -118,6 +128,7 @@ get_samples_pairwise_diff <- function(model_def, samples_tidy) {
            "age" = c("age_std_for_model" = "age_std_for_model"),
            "sex" = c("sex" = "sex"),
            "ethnic_group" = c("ethnic_group" = "ethnic_group"),
+           "ethnicity" = c("ethnicity" = "ethnicity"),
            "family" = c("family_id" = "family_id"), 
            "source" = c("source" = "source")
     )
