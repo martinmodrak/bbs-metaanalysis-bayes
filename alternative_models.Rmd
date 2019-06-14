@@ -1,6 +1,6 @@
 ---
-title: "Appendix 4: Details of Alternative Models and Model Selection"
-abstract: 'This is an appendix for the paper "Exploring the function of the BBSome using clinical data: Meta-analysis of genotype-phenotype associations in Bardet-Biedl Syndrome". This appendix describes all Bayesian models we tried throughout this project. Further, we discuss the reasoning behind our choice of model for the main analysis, in particular why between-study variability is crucial and taking into account complete loss of function (cLOF) useful while age, and sex can be omitted. The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes or Zenodo, DOI: 10.5281/zenodo.3243264'
+title: "Part 2: Details of Alternative Models and Model Selection"
+abstract: 'This is the Part 2 of the Supplemental Statistical Analysis for "Meta-analysis of genotype-phenotype associations in Bardet-Biedl Syndrome uncovers differences among causative genes". This file describes all Bayesian models we tried throughout this project. Further, we discuss the reasoning behind our choice of model for the main analysis, in particular why between-study variability is crucial and taking into account complete loss of function (cLOF) useful while age, and sex can be omitted. The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes or Zenodo, DOI: 10.5281/zenodo.3243264'
 output:
   pdf_document: 
     toc: true
@@ -28,7 +28,7 @@ source(here("plots.R"))
 
 ```
 
-*Note: For historical reasons the feature of "certain loss of function" (cLOF) as discussed in the data is called just "lof" in most analysis code. This part will thus use "lof" and "cLOF" interchangeably.*
+*Note: For historical reasons the feature of "certain loss of function" (cLOF) as discussed in the data is called just "lof" in most of the analysis code. This part will thus use "lof" and "cLOF" interchangeably.*
 
 
 
@@ -47,7 +47,7 @@ data_long <- data_long_from_data(data)
 
 ### Base models
 
-Base models are those that work with (a subset of) the original dataset, without any imputation. The models are defined in file `models.R`. They differ in the model formula, subsets of the dataset they use and priors for model coefficients. The syntax for formulas in `brms` is described [in `brms` manual](https://rdrr.io/cran/brms/man/brmsformula.html) and will not be explained here. The model may work on filtered dataset - `lof` means filtered for only the mutations with certain LOF, `family`, `age`, `sex` and `age_sex` corresponds to filtering for patients with reported family, age, sex or both age and sex. Likewise `ethnic_group` and `family` filter only the data that has those values reported. The list of base models follows:
+Base models are those that work with (a subset of) the original dataset, without any imputation. The models are defined in file `models.R`. They differ in the model formula, subsets of the dataset they use and priors for model coefficients. The syntax for formulas in `brms` is described [in `brms` manual](https://rdrr.io/cran/brms/man/brmsformula.html) and will not be explained here. The model may work on the filtered dataset - `lof` means filtered for only the mutations with certain LOF, `family`, `age`, `sex` and `age_sex` corresponds to filtering for patients with reported family, age, sex or both age and sex. Likewise `ethnic_group` and `family` filter only the data that has those values reported. The list of base models follows:
 
 ```{r}
 models_base %>% walk(function(def) {
@@ -73,7 +73,7 @@ fits_base <- models_base %>%
 ```
 
 
-### Imputation with mice
+### Imputation with the mice package
 
 Including age or sex in the base models is problematic as it involves tossing out `r round(100 * mean(is.na(data$age)))`% or `r round(100 * mean(is.na(data$sex)))`% of data, respectively. This results in wide posterior intervals and weak inferences. To try to ameliorate this we also tested running models on datasets with age and sex imputed, using multiple imputation via the `mice` package. We assume that both age and sex can be related to the functional group of the mutation and to each other. Involving further relations (e.g., individual genes) led to warnings from the `mice` package and we thus didn't use those.
 
@@ -117,7 +117,7 @@ all_fits <- c(fits_base, fits_imputed)
 
 ## Choosing the model for main analysis
 
-In general we use *posterior predictive checks* (PPCheck) to asses model fit. PPCheck is performed by predicting posterior distribution of possible outcomes implied by the fitted model. This distribution can then be compared to what is actually observed in the data and discrepancies can be noted and used to guide model expansion/selection. In our case, we focus on the prevalence of positive phenotypes across various subdivisions of the data. Of prime interests are subdivisions *not* taken into account by a model - if the model explains groupings that were not included, it is a sign that it works well. If the model consistently misestimates groups it is not aware of, it is an indication that such a group should be involved. We use the `bayesplot` package to perform PPChecks. See [Gabry et al. 2018, *Visualisation in Bayesian workflow*](https://arxiv.org/abs/1709.01449) for a more thorough discussion of PPChecks. The following discussion is mostly informal and qualitative as we try to balance model fit, model complexity and other considerations. While the choices we make are partly subjective, Part 3 shows that our conclusions are largely robust to defensibla variations in model specification.
+In general we use *posterior predictive checks* (PPCheck) to asses model fit. PPCheck is performed by predicting posterior distribution of possible outcomes implied by the fitted model. This distribution can then be compared to what is actually observed in the data and discrepancies can be noted and used to guide model expansion/selection. In our case, we focus on the prevalence of positive phenotypes across various subdivisions of the data. Of prime interests are subdivisions *not* taken into account by a model - if the model explains groupings that were not included, it is a sign that it works well. If the model consistently misestimates groups it is not aware of, it is an indication that such a group should be involved. We use the `bayesplot` package to perform PPChecks. See [Gabry et al. 2018, *Visualisation in Bayesian workflow*](https://arxiv.org/abs/1709.01449) for a more thorough discussion of PPChecks. The following discussion is mostly informal and qualitative as we try to balance model fit, model complexity and other considerations. While the choices we make are partly subjective, Part 3 shows that our conclusions are largely robust to defensible variations in model specification.
 
 In most models, we assume phenotype correlations because the data were selected for containing at least two phenotypes and diagnosis criteria is based on having multiple phenotypes. Both of these processes could have introduced correlations. However, the fitted correlations are not conclusive and do not increase the explanatory power of the model (models with different correlation structures are also included).
 
@@ -153,7 +153,7 @@ pp_check_helper <- function(model_names, pp_check_types) {
 pp_check_helper("gene_only", "source_10")
 ```
 
-Here, the bars represent actual prevalence in the data, the dots the posterior mean for those subgroups and the lines posterior 95% credible interval. Note that we clump together all phenotypes for simplicity. We see that the model is overly certain in its predictions and the posterior credible intervals frequently miss the actual counts in a study. Almost half of sources have predictions not very consistent with data.
+Here, the bars represent actual prevalence in the data, the dots the posterior mean for those subgroups and the lines posterior 95% credible interval. Note that we clump all phenotypes together for simplicity. We see that the model is overly certain in its predictions and the posterior credible intervals frequently miss the actual counts in a study. Almost half of sources have predictions not very consistent with data.
 
 
 We try to ameliorate this with a complex model without source, but including family age and sex (filtered) and filtered only for loss of function mutations. This means we use very little data and a large number of predictors. 
@@ -170,7 +170,7 @@ Unsurprisingly, including source explicitly alleviates all of the problems with 
 pp_check_helper("gene_source", "source_10")
 ```
 
-The conclusion is that even the most complex models not including source have problems. Further we have a good reason to believe there is between-study variability even before looking at the data, as the methodologies for diagnosis are not consistent. Including source is therefore necessary. In light of this we consider all models not including source as "Problematic fits" to the data.
+The conclusion is that even the most complex models not including source have problems. Further, we have a good reason to believe there is between-study variability even before looking at the data, as the methodologies for diagnosis are not consistent. Including source is therefore necessary. In light of this, we consider all models not including source as "Problematic fits" to the data.
 
 ### Loss-of-function differences are of a relatively minor importance
 
@@ -186,7 +186,7 @@ The problems almost disappear when adding a per-phenotype cLOF term to the model
 pp_check_helper("gene_lof", c("phenotype_lof","gene_lof"))
 ```
 
-Although the above plot shows that for some genes (most notably BBS08, BBS09 and BBS12) the model has problem explaining differences between cLOF and other mutations.
+Although the above plot shows that for some genes (most notably BBS8, BBS9 and BBS12) the model has problem explaining differences between cLOF and other mutations.
 
 Adding source as a covariate (but ignoring cLOF) ameliorates most of the problems with cLOF looking at both phenotypes and genes:
 
@@ -194,13 +194,13 @@ Adding source as a covariate (but ignoring cLOF) ameliorates most of the problem
 pp_check_helper("gene_source", c("phenotype_lof","gene_lof"))
 ```
 
-Finally, the problem is mitigated even further when both source and cLOF are included (even when cLOF effect is not allowed to vary with gene)
+Finally, the problem is mitigated even further when both source and cLOF are included (even when cLOF effect is not allowed to vary with gene).
 
 ```{r, fig.height=4, fig.width = 6}
 pp_check_helper("gene_source_lof", c("phenotype_lof","gene_lof"))
 ```
 
-Having cLOF coefficient differ per gene does not bring noticeable improvements to fit:
+Allowing the cLOF coefficient to differ per gene does not bring noticeable improvements to fit:
 
 ```{r, fig.height=4, fig.width = 6}
 pp_check_helper("gene_source_lof_per_gene", c("phenotype_lof","gene_lof"))
@@ -243,13 +243,13 @@ pp_check_helper(c("gene_source_lof_family"), "family_4")
 pp_check_helper(c("gene_source_lof", "gene_source_lof_family"), c("family_3"))
 ```
 
-There are few families where the `gene_source_lof` model is fitting poorly (the LEPV and LNEN families) and a small number of those where the actual data is on the border of the predicted 95% interval
+There are few families where the `gene_source_lof` model is fitting poorly (the LEPV and LNEN families) and a small number of those where the actual data is on the border of the predicted 95% interval.
 
-We however consider the improvements due to including familz to be small, while adding family greatly increases uncertainty of the model, as it is a very fine grained predictor. We therefore chose not to include family in the main model. As discussed in Part 3, this does not have notable impact on our conclusions.
+We however consider the improvements due to including family to be small, while adding family greatly increases the uncertainty of the model, as it is a very fine grained predictor. We therefore choose not to include family in the main model. As discussed in Part 3, this does not have notable impact on our conclusions.
 
 ### Understanding within- and between-family variability
 
-We can also look for some signature of family structure in the data directly: 
+We can also look for some signature of the family structure in the data directly: 
 
 ```{r}
 data_long %>%
@@ -283,7 +283,7 @@ data_long %>%
 
 Here, we take all pairs of patients that are from the same family and all pairs of patients that are from the same source but have no family relationship. The pairs need to have mutation in the same gene and the same cLOF. Over each group of pairs we compute the proportion of pairs that have the same phenotype and then subtract this average for between family pairs from the average of within family pairs. I.e. the higher the number, the more are families with the same mutation homogenous in their phenotypes compared to unrelated individuals. Each point represents one study, the point size represents the size of the smaller group (family or unrelated) in the study. 
 
-We see that for most phenotypes results are mostly positive, so family structure (and hence specific type of mutation and/or genetic background) plays some role above just knowing cLOF and the gene where the mutation occurs. 
+We see that for most phenotypes the results are mostly positive, so the family structure (and hence specific type of mutation and/or genetic background) plays some role above just knowing cLOF and the gene where the mutation occurs. 
 
 To measure the amount of variability explained by family structure, we can compute the intraclass correlation (ICC) of family for each phenotype following [Nakagawa & Schielzeth 2010, 'Repeatability for Gaussian and non‐Gaussian data: a practical guide for biologists'](https://doi.org/10.1111/j.1469-185X.2010.00141.x). For simplicity, we will use the `gene_source_lof_family` model, i.e. adding family on top of the model chosen for the main analysis. In this setting the ICC can be computed as:
 
@@ -358,7 +358,7 @@ icc %>%
 
 Thin lines are 95% credible intervals, thick are 50% credible intervals. Note that for family, the ICC roughly corresponds to the plot above, where CI, REP and REN have the most pronounced skew towards family structure playing a notable role. However, for the other phenotypes, very low values of the ICC are consistent with the data. We also see that the ICC for family is likely smaller than for source and likely not much larger than for the gene carrying the mutation.
 
-Due to notable between-source variability, it is hard to make strong conclusions about family structure - it is still quite possible that there is important influence of family for all phenotypes, but it is masked by between-study variability. We also know that the `gene_source_lof_family` model does not fit much better than `gene_source_lof` and so it is hard to put strong emphasis on those results.
+Due to notable between-source variability, it is hard to make strong conclusions about family structure - it is still quite possible that there is important influence of family for all phenotypes, but it is masked by the between-study variability. We also know that the `gene_source_lof_family` model does not fit much better than `gene_source_lof` and so it is hard to put strong emphasis on those results.
 
 ### Ethnicity and ethnic groups
 
@@ -373,7 +373,7 @@ We see that `gene_source_lof` does a good job of fitting most ethnic groups, exc
 data %>% group_by(ethnic_group) %>% summarise(count = n()) %>% kable()
 ```
 
-Finally we see that `gene_source_lof` fits well even when looking at specific ethnicities and adding ethnic group does not really improve the picture:
+Finally, we see that `gene_source_lof` fits well even when looking at specific ethnicities and adding ethnic group does not really improve the picture:
 
 ```{r, fig.height = 4}
 pp_check_helper(c("gene_source_lof", "gene_source_lof_ethnic_group"), c("ethnicity_10"))
@@ -383,7 +383,7 @@ We chose not to include ethnicity or ethnic group in the model, as it is largely
 
 ### Prior width
 
-One example that the "very narrow" prior prevents the model from fitting well is that the fit cannot capture the BBS03 and Chaperonins functional groups, while "narrow" (and wider) priors don't have a problem with that:
+One example that the "very narrow" prior prevents the model from fitting well is that the fit cannot capture the BBS3 and Chaperonins functional groups, while "narrow" (and wider) priors don't have a problem with that:
 
 ```{r, fig.width = 6, fig.height = 1.5}
 pp_check_helper(c("gene_source_very_narrow","gene_source_narrow", "gene_source"), c("functional_group"))
