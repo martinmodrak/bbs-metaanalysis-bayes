@@ -245,11 +245,11 @@ pp_check_helper(c("gene_source_lof", "gene_source_lof_family"), c("family_3"))
 
 There are few families where the `gene_source_lof` model is fitting poorly (the LEPV and LNEN families) and a small number of those where the actual data is on the border of the predicted 95% interval.
 
-We however consider the improvements due to including family to be small, while adding family greatly increases the uncertainty of the model, as it is a very fine grained predictor. We therefore choose not to include family in the main model. As discussed in Part 3, this does not have notable impact on our conclusions.
+We however consider the improvements due to including family to be small, while adding family greatly increases the uncertainty of the model, as it is a very fine grained predictor. We therefore chose not to include family in the main model. As discussed in Part 3, this does not have notable impact on our conclusions.
 
 ### Understanding within- and between-family variability
 
-We can also look for some signature of the family structure in the data directly: 
+We can also look for some signature of family structure in the data directly: 
 
 ```{r}
 data_long %>%
@@ -283,7 +283,7 @@ data_long %>%
 
 Here, we take all pairs of patients that are from the same family and all pairs of patients that are from the same source but have no family relationship. The pairs need to have mutation in the same gene and the same cLOF. Over each group of pairs we compute the proportion of pairs that have the same phenotype and then subtract this average for between family pairs from the average of within family pairs. I.e. the higher the number, the more are families with the same mutation homogenous in their phenotypes compared to unrelated individuals. Each point represents one study, the point size represents the size of the smaller group (family or unrelated) in the study. 
 
-We see that for most phenotypes the results are mostly positive, so the family structure (and hence specific type of mutation and/or genetic background) plays some role above just knowing cLOF and the gene where the mutation occurs. 
+We see that for most phenotypes the results are mostly positive, so family structure (and hence specific type of mutation and/or genetic background) plays some role above just knowing cLOF and the gene where the mutation occurs. 
 
 To measure the amount of variability explained by family structure, we can compute the intraclass correlation (ICC) of family for each phenotype following [Nakagawa & Schielzeth 2010, 'Repeatability for Gaussian and non‐Gaussian data: a practical guide for biologists'](https://doi.org/10.1111/j.1469-185X.2010.00141.x). For simplicity, we will use the `gene_source_lof_family` model, i.e. adding family on top of the model chosen for the main analysis. In this setting the ICC can be computed as:
 
@@ -379,7 +379,7 @@ Finally, we see that `gene_source_lof` fits well even when looking at specific e
 pp_check_helper(c("gene_source_lof", "gene_source_lof_ethnic_group"), c("ethnicity_10"))
 ```
 
-We chose not to include ethnicity or ethnic group in the model, as it is largely explained with just the between-study variability.
+We chose not to include ethnicity or ethnic group in the model, as it is largely explained with just between-study variability.
 
 ### Prior width
 

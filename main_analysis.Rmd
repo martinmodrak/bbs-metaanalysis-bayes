@@ -484,7 +484,7 @@ data_long %>% filter(phenotype == "CI") %>% group_by(source) %>%
 
 ```
 
-This includes the Ullah et al. study which has the largest number of BBS7 cases with reported CI phenotype in the whole dataset. So while there is some evidence for BBS7 having unusually high prevalence of CI, we cannot rule out that this is caused by the between-study variability.
+This includes the Ullah et al. study which has the largest number of BBS7 cases with reported CI phenotype in the whole dataset. So while there is some evidence for BBS7 having unusually high prevalence of CI, we cannot rule out that this is caused by between-study variability.
 
 The above plot showed the total prevalence across all other mutations, we can also look at comparisons of prevalence between individual mutations:
 
