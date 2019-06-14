@@ -1,6 +1,6 @@
 ---
-title: "Appendix: Additional multiverse analysis of BBS phenotypes"
-abstract: 'This is an appendix for the paper "Exploring the function of the BBSome using clinical data: Meta-analysis of genotype-phenotype associations in Bardet-Biedl Syndrome". Here, we compute how the conclusions of the paper hold under multiple different models. The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes or Zenodo, DOI: 10.5281/zenodo.3243264'
+title: "Part 3: Bayesian Meta-analysis of BBS phenotypes"
+abstract: 'This is a supplementary file for the paper "Meta-analysis of genotype-phenotype associations in Bardet-Biedl Syndrome uncovers differences among causative genes". Here, we compute how the conclusions of the paper hold under multiple different models. The complete source code for the analysis can be found at https://github.com/martinmodrak/bbs-metaanalysis-bayes or Zenodo, DOI: 10.5281/zenodo.3243264'
 output:
   pdf_document: default
 ---
@@ -72,7 +72,7 @@ n_genes_lof_different <- 5
 ```
 
   *	The severity of BBS is worse in patients with LOF mutations than in patients with other mutations. 
-    * Ignored for models that do not include LOF
+    * Ignored for models that do not include LOF.
     * Measured as posterior probability, that the LOF effect is positive (OR > 1) for at least `r n_genes_lof_different` BBSome genes in `r min_phenotypes_for_diffs` phenotypes.
 ```{r}
 
@@ -148,7 +148,7 @@ samples_diff_bbsome %>%
 ```
 
   *	BBS4 phenotype is the most severe of all BBSome-encoding genes.
-    * Probability that odds for BBS4 are among the top 3 odds for at least 5 phenotypes
+    * Probability that odds for BBS4 are among the top 3 odds for at least 5 phenotypes.
     * Probability that a patient with BBS4 has the highest total number of phenotypes present.
 ```{r}
 evaluators[["bbs04_top"]] <- function(samples_diff, samples_diff_bbsome, samples_prediction_bbsome) {
@@ -187,7 +187,7 @@ evaluators[["REN_bbsome_genes_differ"]] <- function(samples_diff, samples_diff_b
 }
 ```
 
-  *	Differences between small groups of genes - Probability that all pairwise odds ratios are greater/less than 1 (depending on the direction of the comparison) 
+  *	Differences between small groups of genes: probability that all pairwise odds ratios are greater/less than 1 (depending on the direction of the comparison). 
     * Cognitive impairment is less frequent in BBS3 patients compared to other patients (all canonical BBS genes).
 ```{r}
 evaluator_prob_group_diff_all <- function(phenotype_name, group1, group2, group1_name = paste0(group1, collapse = "_"),group2_name = paste0(group2, collapse = "_")) {
@@ -405,13 +405,13 @@ conclusions_plot
 
 ```
 
-A heatmap of posterior probability of statements characterizing individual conclusions. Note that the probability is on logit scale. All Bayesian models include gene as covariate but may also include additional covariates: source, age, sex, ethnicity or ethnic group, family and certain loss of function (cLOF) - either as a global covariate or by gene. Since age and sex are not available for all data, we can either fit the model only to patients where those are reported (filtered) or impute missing data (imputed). Instead of using cLOF as a covariate, we can fit the model using only patients with cLOF mutations (filtered cLOF). For most models we include a correlation structure across phenotypes (e.g., that two phenotypes occur frequently together across all genes), but this structure may be absent (no corr.) or replaced with a correlation structure across genes (gene corr. - e.g., that two genes have similar pattern of effects across all phenotypes). We also tried modifying the width of prior distributions (wide, narrow, very narrow). See Part 2 of this supplement for a detailed description of all models and the imputation procedure. Dark grey indicates that the question could not be evaluated for the given model (currently only asking for cLOF differences in models that exclude cLOF). The "Problematic fits" category is reserved for models we know do not capture some important variability in the dataset, as discussed in Part 2.
+A heatmap of posterior probability of statements characterizing individual conclusions. Note that the probability is on logit scale. All Bayesian models include gene as covariate, but may also include additional covariates: source, age, sex, ethnicity or ethnic group, family and certain loss of function (cLOF) - either as a global covariate or by gene. Since age and sex are not available for all data, we can either fit the model only to patients where those are reported (filtered) or impute missing data (imputed). Instead of using cLOF as a covariate, we can fit the model using only patients with cLOF mutations (filtered cLOF). For most models we include a correlation structure across phenotypes (e.g., that two phenotypes occur frequently together across all genes), but this structure may be absent (no corr.) or replaced with a correlation structure across genes (gene corr. - e.g., that two genes have similar pattern of effects across all phenotypes). We also tried modifying the width of prior distributions (wide, narrow, very narrow). See Part 2 of this supplement for a detailed description of all models and the imputation procedure. Dark grey indicates that the question could not be evaluated for the given model (currently only asking for cLOF differences in models that exclude cLOF). The "Problematic fits" category is reserved for models we know do not capture some important variability in the dataset, as discussed in Part 2.
 
-Note: posterior probabilities are clamped to be at least $0.001$ and at most $0.999$ as the sampling scheme used does not let us to be very confident in the tails of the distribution. It is possible that with more computational resources some of the posterior probabilities will be more extreme.
+Note: posterior probabilities are clamped to be at least $0.001$ and at most $0.999$ as the sampling scheme used does not let us be very confident in the tails of the distribution. It is possible that with more computational resources some of the posterior probabilities will be more extreme.
 
 Some patterns to notice:
 
-* When fitting filtered datasets, there is less certainty implying less strong evidence in both directions
+* When fitting filtered datasets, there is less certainty implying less strong evidence in both directions.
 * Using very narrow priors on gene coefficients ($N(0,0.1)$, i.e., that almost all odds ratios should be less than $\sim 1.2$) unsurprisingly results in little evidence for directional differences between genes.
 * Other than noted above, the conclusions are not sensitive to model choice.
 
@@ -447,7 +447,7 @@ freq_conclusions_plot <-  build_freq_conclusions_plot(freq_conclusions)
 freq_conclusions_plot
 ```
 
-Heatmap of p-values from frequentist analysis for the same conclusions (exact computations described in the main body of the paper).
+Heatmap of p-values from frequentist analysis for the same conclusions (exact computations described in the main body of the paper and in the analysis code and report on Zenodo, DOI: 10.5281/zenodo.3243400).
 
 `r if(include_validation) {"## Validation dataset"}`
 
@@ -650,7 +650,7 @@ validation_data_long %>%
 }
 ```
 
-Finally a brief summary of the main analyses as shown in the main paper.
+Finally, a brief summary of the main analyses as shown in the main paper.
 
 ```{r fig.width=6.25, fig.height=3.5}
 validation_in_main = include_validation
